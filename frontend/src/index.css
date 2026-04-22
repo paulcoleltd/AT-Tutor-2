@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { @apply scroll-smooth; }
+  body { @apply bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-200; }
+}
+
+/* Custom scrollbar */
+.chat-scroll::-webkit-scrollbar { width: 6px; }
+.chat-scroll::-webkit-scrollbar-track { @apply bg-transparent; }
+.chat-scroll::-webkit-scrollbar-thumb { @apply bg-slate-300 dark:bg-slate-600 rounded-full; }
+.chat-scroll::-webkit-scrollbar-thumb:hover { @apply bg-slate-400 dark:bg-slate-500; }
+
+/* Markdown prose overrides inside chat bubbles */
+.prose-chat h1, .prose-chat h2, .prose-chat h3 { @apply font-bold mt-3 mb-1; }
+.prose-chat h1 { @apply text-base; }
+.prose-chat h2 { @apply text-sm; }
+.prose-chat h3 { @apply text-sm; }
+.prose-chat p  { @apply mb-2 last:mb-0; }
+.prose-chat ul, .prose-chat ol { @apply ml-4 mb-2 space-y-0.5; }
+.prose-chat ul { @apply list-disc; }
+.prose-chat ol { @apply list-decimal; }
+.prose-chat li { @apply text-sm; }
+.prose-chat code { @apply bg-black/10 dark:bg-white/10 px-1 rounded text-xs font-mono; }
+.prose-chat pre  { @apply bg-black/10 dark:bg-white/10 rounded-lg p-3 overflow-x-auto text-xs font-mono my-2; }
+.prose-chat strong { @apply font-semibold; }
+.prose-chat blockquote { @apply border-l-2 border-current pl-3 italic opacity-80 my-2; }
+.prose-chat hr { @apply border-current opacity-20 my-3; }
+
+/* Typing cursor animation */
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+.cursor-blink { animation: blink 1s step-end infinite; }
