@@ -2,15 +2,20 @@ import React, { useState } from 'react';
 import { Chat } from './components/Chat';
 import { FileUpload } from './components/FileUpload';
 import { KnowledgeBaseStatus } from './components/KnowledgeBaseStatus';
+import { ProviderSwitcher } from './components/ProviderSwitcher';
+import { MediaPlayer } from './components/MediaPlayer';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useDarkMode } from './hooks/useDarkMode';
 import { useSession } from './hooks/useSession';
+import { LLMProvider } from './lib/api';
 
 const App: React.FC = () => {
   const { dark, toggle } = useDarkMode();
   const { sessionId, resetSession } = useSession();
   const [kbRefreshKey, setKbRefreshKey] = useState(0);
+  const [activeProvider, setActiveProvider] = useState<LLMProvider>('claude');
+  const [mediaUrl, setMediaUrl] = useState<string | undefined>(undefined);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 to-blue-50 dark:from-slate-900 dark:to-slate-800 flex flex-col transition-colors duration-200">
@@ -45,6 +50,18 @@ const App: React.FC = () => {
             <KnowledgeBaseStatus refreshKey={kbRefreshKey} />
           </ErrorBoundary>
 
+          <ErrorBoundary>
+            <ProviderSwitcher onSwitch={setActiveProvider} />
+          </ErrorBoundary>
+
+          <ErrorBoundary>
+            <MediaPlayer
+              onMediaLoaded={() => setKbRefreshKey(k => k + 1)}
+              externalUrl={mediaUrl}
+              onExternalUrlConsumed={() => setMediaUrl(undefined)}
+            />
+          </ErrorBoundary>
+
           {/* Tips */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
             <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
@@ -52,7 +69,7 @@ const App: React.FC = () => {
             </h2>
             <ol className="space-y-2 text-xs text-slate-500 dark:text-slate-400 list-none">
               {[
-                'Upload a PDF, Markdown, or TXT file to seed the knowledge base.',
+                'Upload a PDF, Word (.docx), Markdown, or TXT file to seed the knowledge base.',
                 'Use 💡 Explain for in-depth breakdowns with examples.',
                 'Use 📝 Quiz to test your understanding interactively.',
                 'Use 📋 Summarize for a structured overview of any document.',
@@ -84,7 +101,14 @@ const App: React.FC = () => {
         {/* Chat panel */}
         <section className="flex-1 min-h-0 min-w-0" aria-label="Chat panel">
           <ErrorBoundary>
-            <Chat sessionId={sessionId} onSessionReset={resetSession} />
+            <Chat
+              sessionId={sessionId}
+              onSessionReset={resetSession}
+              activeProvider={activeProvider}
+              onProviderSwitch={setActiveProvider}
+              onNavigateMedia={url => setMediaUrl(url)}
+              onKbRefresh={() => setKbRefreshKey(k => k + 1)}
+            />
           </ErrorBoundary>
         </section>
       </main>

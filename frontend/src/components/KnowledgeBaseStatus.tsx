@@ -6,12 +6,13 @@ interface Source { sourceId: string; filename: string; chunks: number; type: str
 interface Props { refreshKey?: number; }
 
 export const KnowledgeBaseStatus: React.FC<Props> = ({ refreshKey }) => {
-  const [health,   setHealth]   = useState<{ provider: string; knowledgeBase: { totalChunks: number; sources: Source[] } } | null>(null);
-  const [error,    setError]    = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [health,        setHealth]        = useState<{ provider: string; knowledgeBase: { totalChunks: number; sources: Source[] } } | null>(null);
+  const [error,         setError]         = useState(false);
+  const [errorDismissed, setErrorDismissed] = useState(false);
+  const [deleting,      setDeleting]      = useState<string | null>(null);
 
   const fetchHealth = useCallback(async () => {
-    try { setHealth(await getHealth()); setError(false); }
+    try { setHealth(await getHealth()); setError(false); setErrorDismissed(false); }
     catch { setError(true); }
   }, []);
 
@@ -24,16 +25,35 @@ export const KnowledgeBaseStatus: React.FC<Props> = ({ refreshKey }) => {
     finally { setDeleting(null); }
   };
 
-  if (error) return (
+  if (error && !errorDismissed) return (
     <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 text-xs text-red-600 dark:text-red-400">
-      ⚠️ Backend offline — is it running on port 4000?
+      <div className="flex items-start justify-between gap-2">
+        <span>⚠️ Backend offline — is it running on port 4000?</span>
+        <button
+          onClick={() => setErrorDismissed(true)}
+          title="Dismiss error"
+          className="flex-shrink-0 w-5 h-5 rounded-full bg-red-200 dark:bg-red-800 hover:bg-red-300 dark:hover:bg-red-700 flex items-center justify-center text-[10px] font-bold transition-colors"
+        >
+          ✕
+        </button>
+      </div>
     </div>
   );
   if (!health) return null;
 
   const { totalChunks, sources } = health.knowledgeBase;
 
-  const typeIcon = (t: string) => t === 'pdf' ? '📕' : t === 'markdown' ? '📝' : '📄';
+  const typeIcon = (t: string) => {
+    switch (t) {
+      case 'pdf':      return '📕';
+      case 'markdown': return '📝';
+      case 'docx':     return '📘';
+      case 'image':    return '🖼️';
+      case 'audio':    return '🎵';
+      case 'video':    return '🎬';
+      default:         return '📄';
+    }
+  };
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">

@@ -4,10 +4,13 @@ import { TeacherAgent, TeachMode } from '../agent/teacherAgent';
 import { LLMError } from '../models/llmRouter';
 
 const ChatBodySchema = z.object({
-  message:   z.string().min(1).max(4000),
-  mode:      z.enum(['explain', 'quiz', 'chat', 'summarize', 'flashcard']).optional().default('explain'),
-  sessionId: z.string().uuid().optional(),
-  stream:    z.boolean().optional().default(false),
+  message:        z.string().min(1).max(4000),
+  mode:           z.enum(['explain', 'quiz', 'chat', 'summarize', 'flashcard']).optional().default('explain'),
+  sessionId:      z.string().uuid().optional(),
+  stream:         z.boolean().optional().default(false),
+  imageBase64:    z.string().optional(),
+  imageMimeType:  z.string().optional(),
+  focusSourceId:  z.string().uuid().optional(), // prioritise a specific KB source
 });
 
 const ANONYMOUS_SESSION = 'anonymous';
@@ -22,7 +25,8 @@ export function createChatRouter(agent: TeacherAgent): Router {
       return;
     }
 
-    const { message, mode, sessionId = ANONYMOUS_SESSION, stream } = parsed.data;
+    const { message, mode, sessionId = ANONYMOUS_SESSION, stream, imageBase64, imageMimeType, focusSourceId } = parsed.data;
+    const imageData = imageBase64 && imageMimeType ? { base64: imageBase64, mimeType: imageMimeType } : undefined;
 
     // ── Streaming path (SSE) ──────────────────────────────────────────────────
     if (stream) {
@@ -32,7 +36,7 @@ export function createChatRouter(agent: TeacherAgent): Router {
       res.flushHeaders();
 
       try {
-        for await (const event of agent.stream(message, mode as TeachMode, sessionId)) {
+        for await (const event of agent.stream(message, mode as TeachMode, sessionId, imageData, focusSourceId)) {
           res.write(`data: ${JSON.stringify(event)}\n\n`);
         }
       } catch (err) {

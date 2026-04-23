@@ -20,6 +20,22 @@ export class VectorStore {
     this.items.push(item);
   }
 
+  /** Search only within a specific sourceId, then fall back to global search for remaining slots */
+  searchFromSource(queryEmbedding: number[], sourceId: string, k = 5): { items: VectorItem[]; hadSourceHits: boolean } {
+    if (!this.items.length) return { items: [], hadSourceHits: false };
+    const sourceItems  = this.items.filter(i => i.metadata.sourceId === sourceId);
+    const otherItems   = this.items.filter(i => i.metadata.sourceId !== sourceId);
+    const rank = (arr: VectorItem[]) =>
+      arr.map(item => ({ item, score: cosineSimilarity(queryEmbedding, item.embedding) }))
+         .sort((a, b) => b.score - a.score);
+    const sourceRanked = rank(sourceItems).slice(0, k);
+    const hadSourceHits = sourceRanked.length > 0;
+    // Fill remaining slots with best global results (excluding already-picked items)
+    const pickedIds = new Set(sourceRanked.map(r => r.item.id));
+    const global    = rank(otherItems).filter(r => !pickedIds.has(r.item.id)).slice(0, k - sourceRanked.length);
+    return { items: [...sourceRanked, ...global].map(r => r.item), hadSourceHits };
+  }
+
   search(queryEmbedding: number[], k = 5): VectorItem[] {
     if (!this.items.length) return [];
     if (!queryEmbedding.length)
