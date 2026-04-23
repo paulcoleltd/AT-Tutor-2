@@ -210,15 +210,10 @@ export const MediaPlayer: React.FC<Props> = ({ onMediaLoaded, externalUrl, onExt
                   ref={audioRef}
                   controls
                   preload="auto"
+                  src={activeUrl}
                   onError={handleError}
                   className="w-full"
-                >
-                  {/* Prefer FLAC/WAV (lossless) → OGG Opus (best lossy) → MP3 */}
-                  <source src={activeUrl.replace(/\.(mp3|m4a|ogg)(\?|$)/, '.flac$2')} type="audio/flac" />
-                  <source src={activeUrl.replace(/\.(mp3|m4a|flac)(\?|$)/, '.ogg$2')} type="audio/ogg; codecs=opus" />
-                  <source src={activeUrl} type="audio/mpeg" />
-                  <source src={activeUrl} type="audio/wav" />
-                </audio>
+                />
               )}
 
               {mediaType === 'unknown' && (
