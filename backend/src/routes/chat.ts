@@ -3,14 +3,17 @@ import { z } from 'zod';
 import { TeacherAgent, TeachMode } from '../agent/teacherAgent';
 import { LLMError } from '../models/llmRouter';
 
+const ALLOWED_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const;
+
 const ChatBodySchema = z.object({
   message:        z.string().min(1).max(4000),
   mode:           z.enum(['explain', 'quiz', 'chat', 'summarize', 'flashcard']).optional().default('explain'),
   sessionId:      z.string().uuid().optional(),
   stream:         z.boolean().optional().default(false),
-  imageBase64:    z.string().optional(),
-  imageMimeType:  z.string().optional(),
-  focusSourceId:  z.string().uuid().optional(), // prioritise a specific KB source
+  // Base64 limit: ~1 MB binary → ~1.37 MB base64; express.json limit is 1 MB so this is a belt-and-suspenders cap
+  imageBase64:    z.string().max(1_400_000).optional(),
+  imageMimeType:  z.enum(ALLOWED_IMAGE_MIME).optional(),
+  focusSourceId:  z.string().uuid().optional(),
 });
 
 const ANONYMOUS_SESSION = 'anonymous';

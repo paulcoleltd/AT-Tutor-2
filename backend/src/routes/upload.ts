@@ -169,9 +169,9 @@ export function createUploadRouter(store: VectorStore): Router {
         provider: activeNow,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error.';
       console.error(`[upload] Error processing "${filename}":`, err);
-      res.status(500).json({ error: message });
+      // Return generic message — internal detail (incl. API key fragments) stays server-side
+      res.status(500).json({ error: 'Failed to process the uploaded file. Please try again.' });
     }
   });
 

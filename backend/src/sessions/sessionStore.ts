@@ -2,6 +2,7 @@ import type { Message } from '../models/llmRouter';
 
 const MAX_HISTORY_TURNS = 10;
 const SESSION_TTL_MS    = 30 * 60 * 1000; // 30 minutes idle expiry
+const MAX_SESSIONS      = 500;             // hard cap — oldest evicted when exceeded
 
 interface Session {
   history:     Message[];
@@ -24,6 +25,11 @@ export class SessionStore {
 
   appendMessages(sessionId: string, user: string, assistant: string): void {
     this.gc();
+    // Evict oldest session if hard cap reached and this is a new session
+    if (!this.sessions.has(sessionId) && this.sessions.size >= MAX_SESSIONS) {
+      const oldest = [...this.sessions.entries()].sort((a, b) => a[1].lastUsed - b[1].lastUsed)[0];
+      if (oldest) this.sessions.delete(oldest[0]);
+    }
     const session = this.sessions.get(sessionId) ?? { history: [], lastUsed: Date.now() };
     session.history.push({ role: 'user', content: user });
     session.history.push({ role: 'assistant', content: assistant });

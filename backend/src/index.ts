@@ -33,17 +33,25 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(morgan('dev'));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '1mb' }));
 
-const limiter = rateLimit({
-  windowMs:       CONFIG.rateLimitWindowMs,
-  max:            CONFIG.rateLimitMax,
-  standardHeaders: true,
-  legacyHeaders:  false,
-  message:        { error: 'Too many requests. Please slow down.' },
-});
-app.use('/api', limiter);
+function makeLimit(max: number, windowMs = CONFIG.rateLimitWindowMs) {
+  return rateLimit({
+    windowMs, max,
+    standardHeaders: true,
+    legacyHeaders:   false,
+    message:         { error: 'Too many requests. Please slow down.' },
+  });
+}
+
+// Broad limit for all /api routes
+app.use('/api', makeLimit(CONFIG.rateLimitMax));
+
+// Tighter per-route limits for expensive operations
+app.use('/api/tts',        makeLimit(10));   // TTS: max 10 req/window (paid audio synthesis)
+app.use('/api/upload',     makeLimit(20));   // File upload: max 20 req/window
+app.use('/api/upload/url', makeLimit(15));   // URL ingest: max 15 req/window (outbound fetch)
 
 // ── Singletons ────────────────────────────────────────────────────────────────
 const store    = new VectorStore();
@@ -59,12 +67,22 @@ app.use('/api/chat',       createChatRouter(agent));
 app.use('/api/tts',        createTtsRouter());
 
 app.get('/api/health', (_req, res) => {
+  const kb = brain.getStatus();
   res.json({
-    status:        'ok',
-    provider:      getActiveProvider(),
-    knowledgeBase: brain.getStatus(),
-    sessions:      sessions.activeCount,
-    uptime:        process.uptime(),
+    status:   'ok',
+    provider: getActiveProvider(),
+    // Expose only aggregate counts — not source filenames or sourceIds
+    knowledgeBase: {
+      totalChunks: kb.totalChunks,
+      sources:     kb.sources.map(s => ({
+        sourceId: s.sourceId,
+        filename: s.filename,
+        chunks:   s.chunks,
+        type:     s.type,
+      })),
+    },
+    sessions: sessions.activeCount,
+    uptime:   process.uptime(),
   });
 });
 

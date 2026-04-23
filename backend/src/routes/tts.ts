@@ -37,6 +37,10 @@ export function createTtsRouter(): Router {
       .replace(/\n/g, ' ')
       .trim();
 
+    // Abort upstream fetch if client disconnects — avoids wasting OpenAI billing
+    const abort = new AbortController();
+    req.on('close', () => abort.abort());
+
     try {
       const upstream = await fetch('https://api.openai.com/v1/audio/speech', {
         method: 'POST',
@@ -44,7 +48,8 @@ export function createTtsRouter(): Router {
           'Authorization': `Bearer ${CONFIG.openaiApiKey}`,
           'Content-Type':  'application/json',
         },
-        body: JSON.stringify({ model: 'tts-1-hd', input: clean, voice, response_format: 'mp3', speed: 1.0 }),
+        body:   JSON.stringify({ model: 'tts-1-hd', input: clean, voice, response_format: 'mp3', speed: 1.0 }),
+        signal: abort.signal,
       });
 
       if (!upstream.ok) {
@@ -61,10 +66,12 @@ export function createTtsRouter(): Router {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        if (res.writableEnded) break; // client disconnected mid-stream
         res.write(Buffer.from(value));
       }
       res.end();
-    } catch (err) {
+    } catch (err: any) {
+      if (err.name === 'AbortError') return; // client disconnected — not an error
       console.error('[tts] Unexpected error:', err);
       res.status(500).json({ error: 'Unexpected TTS error.' });
     }
