@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { streamMessage, clearHistory, speakWithAI, setProvider, uploadUrl, TeachMode, LLMProvider, ImageAttachment } from '../lib/api';
@@ -54,6 +54,15 @@ const AGENT_COMMANDS: { pattern: RegExp; provider: LLMProvider; name: string }[]
   { pattern: /hey\s+agent\s*2|switch\s+to\s+gemini|use\s+gemini/i,  provider: 'gemini', name: 'Gemini (Agent 2)'  },
   { pattern: /hey\s+agent\s*3|switch\s+to\s+openai|use\s+openai/i,  provider: 'openai', name: 'OpenAI (Agent 3)'  },
 ];
+
+// Maximum messages kept in state — oldest are trimmed when exceeded
+const MAX_MESSAGES = 200;
+
+// Helper: append messages and trim oldest if over the cap
+function cappedMessages(prev: Message[], ...toAdd: Message[]): Message[] {
+  const next = [...prev, ...toAdd];
+  return next.length > MAX_MESSAGES ? next.slice(next.length - MAX_MESSAGES) : next;
+}
 
 // ── Action toolbar shown below each assistant reply ───────────────────────────
 interface ToolbarProps {
@@ -183,6 +192,102 @@ const ActionToolbar: React.FC<ToolbarProps> = ({ msg, isLast, isLoading, onDelet
   );
 };
 
+// ── Memoised per-message bubble ───────────────────────────────────────────────
+// Wrapped in memo so only the actively-streaming message re-renders on each token;
+// all settled messages stay frozen until their own content/sources change.
+interface BubbleProps {
+  msg:          Message;
+  isLastAssistant: boolean;
+  isLoading:    boolean;
+  onDelete:     (id: string) => void;
+  onRegenerate: (id: string) => void;
+}
+
+const MessageBubble = memo(({ msg, isLastAssistant, isLoading, onDelete, onRegenerate }: BubbleProps) => (
+  // content-visibility:auto lets the browser skip layout/paint for off-screen bubbles
+  <div
+    className={`group flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+    style={{ contentVisibility: 'auto', containIntrinsicSize: '0 120px' }}
+  >
+    {msg.role === 'assistant' && (
+      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xs mr-2 mt-0.5 flex-shrink-0" aria-hidden="true">🎓</div>
+    )}
+
+    <div className={`flex flex-col gap-0.5 ${msg.role === 'user' ? 'max-w-[80%] items-end' : 'max-w-[85%] items-start'}`}>
+      {/* Bubble */}
+      <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+        msg.role === 'user'
+          ? 'bg-blue-600 text-white rounded-br-sm'
+          : msg.isError
+            ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 rounded-bl-sm'
+            : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-bl-sm'
+      }`}>
+        {/* Attached image */}
+        {msg.image && (
+          <div className="mb-2">
+            <img
+              src={`data:${msg.image.mimeType};base64,${msg.image.base64}`}
+              alt={msg.image.name}
+              className="max-w-xs max-h-48 rounded-lg object-contain border border-white/20"
+            />
+            <p className="text-[10px] mt-1 opacity-70">📎 {msg.image.name}</p>
+          </div>
+        )}
+
+        {msg.role === 'assistant' ? (
+          <div className="prose-chat">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+            {msg.streaming && <span className="cursor-blink ml-0.5 text-blue-400">▋</span>}
+          </div>
+        ) : msg.content}
+      </div>
+
+      {/* Source chips */}
+      {msg.sources && msg.sources.length > 0 && (
+        <div className="flex flex-wrap gap-1 px-1 mt-0.5">
+          {msg.sources.map(src => (
+            <span key={src} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+              📄 {src}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Timestamp */}
+      <span className={`text-[10px] text-slate-400 px-1 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
+        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+      </span>
+
+      {/* Action toolbar — assistant only */}
+      {msg.role === 'assistant' && (
+        <ActionToolbar
+          msg={msg}
+          isLast={isLastAssistant}
+          isLoading={isLoading}
+          onDelete={onDelete}
+          onRegenerate={onRegenerate}
+        />
+      )}
+
+      {/* User message delete (hover only) */}
+      {msg.role === 'user' && (
+        <button
+          onClick={() => onDelete(msg.id)}
+          title="Delete message"
+          className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-slate-400 hover:text-red-500 px-1"
+        >
+          Delete
+        </button>
+      )}
+    </div>
+
+    {msg.role === 'user' && (
+      <div className="w-7 h-7 rounded-full bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-xs ml-2 mt-0.5 flex-shrink-0" aria-hidden="true">👤</div>
+    )}
+  </div>
+));
+MessageBubble.displayName = 'MessageBubble';
+
 // ── Main Chat component ───────────────────────────────────────────────────────
 interface Props {
   sessionId: string;
@@ -268,7 +373,7 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
     setMessages(prev =>
       replaceId
         ? prev.map(m => m.id === replaceId ? placeholder : m)
-        : [...prev, placeholder]
+        : cappedMessages(prev, placeholder)
     );
 
     const abort = new AbortController();
@@ -327,11 +432,11 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
       try {
         await setProvider(cmd.provider);
         onProviderSwitch?.(cmd.provider);
-        setMessages(prev => [
-          ...prev,
+        setMessages(prev => cappedMessages(
+          prev,
           { id: makeId(), role: 'user',      content: trimmed, timestamp: new Date() },
           { id: makeId(), role: 'assistant',  content: `✅ Switched to **${cmd.name}**. I'm now using ${cmd.name} to answer your questions!`, timestamp: new Date() },
-        ]);
+        ));
       } catch (e: any) { setError(e.message); }
       return;
     }
@@ -345,7 +450,7 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
         content: `🔄 Loading **${navUrl}** into the knowledge base…`,
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, userMsg, loadingMsg]);
+      setMessages(prev => cappedMessages(prev, userMsg, loadingMsg));
 
       // Open media player automatically for video/audio URLs
       if (isVideoUrl(navUrl) || isAudioUrl(navUrl)) {
@@ -389,9 +494,9 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
       id: makeId(), role: 'user', content: trimmed,
       timestamp: new Date(), image: attachedImage ?? undefined,
     };
-    setMessages(prev => [...prev, userMsg]);
+    setMessages(prev => cappedMessages(prev, userMsg));
 
-    await streamReply(trimmed, mode, currentSessId, attachedImage ?? undefined, focusSourceId);
+    await streamReply(trimmed, mode, currentSessId, attachedImage ?? undefined, undefined, focusSourceId);
   }, [input, isLoading, mode, currentSessId, pendingImage, streamReply, onProviderSwitch]);
 
   // Regenerate: find the user message before this assistant message and replay
@@ -449,6 +554,11 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
         <div className="flex items-center gap-2">
           <span className="text-xl">🎓</span>
           <h1 className="text-white font-bold text-base">AI Tutor</h1>
+          {messages.length > 1 && (
+            <span className="text-[10px] text-blue-200 bg-white/10 px-1.5 py-0.5 rounded-full">
+              {messages.length}/{MAX_MESSAGES}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           <div role="group" aria-label="Learning mode" className="flex gap-1">
@@ -494,89 +604,23 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto chat-scroll px-4 py-4 space-y-3" role="log" aria-label="Conversation">
-        {messages.map((msg, idx) => {
-          const isLastAssistant = idx === lastAssistantIdx;
+        {/* Trim notice — shown when the cap has been hit */}
+        {messages.length >= MAX_MESSAGES && (
+          <div className="text-center text-[10px] text-slate-400 dark:text-slate-500 py-1 select-none">
+            📜 Showing last {MAX_MESSAGES} messages · Start a new session to clear history
+          </div>
+        )}
 
-          return (
-            <div key={msg.id} className={`group flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              {msg.role === 'assistant' && (
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xs mr-2 mt-0.5 flex-shrink-0" aria-hidden="true">🎓</div>
-              )}
-
-              <div className={`flex flex-col gap-0.5 ${msg.role === 'user' ? 'max-w-[80%] items-end' : 'max-w-[85%] items-start'}`}>
-                {/* Bubble */}
-                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                  msg.role === 'user'
-                    ? 'bg-blue-600 text-white rounded-br-sm'
-                    : msg.isError
-                      ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 rounded-bl-sm'
-                      : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-bl-sm'
-                }`}>
-                  {/* Attached image */}
-                  {msg.image && (
-                    <div className="mb-2">
-                      <img
-                        src={`data:${msg.image.mimeType};base64,${msg.image.base64}`}
-                        alt={msg.image.name}
-                        className="max-w-xs max-h-48 rounded-lg object-contain border border-white/20"
-                      />
-                      <p className="text-[10px] mt-1 opacity-70">📎 {msg.image.name}</p>
-                    </div>
-                  )}
-
-                  {msg.role === 'assistant' ? (
-                    <div className="prose-chat">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                      {msg.streaming && <span className="cursor-blink ml-0.5 text-blue-400">▋</span>}
-                    </div>
-                  ) : msg.content}
-                </div>
-
-                {/* Source chips */}
-                {msg.sources && msg.sources.length > 0 && (
-                  <div className="flex flex-wrap gap-1 px-1 mt-0.5">
-                    {msg.sources.map(src => (
-                      <span key={src} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
-                        📄 {src}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Timestamp */}
-                <span className={`text-[10px] text-slate-400 px-1 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-                  {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-
-                {/* Action toolbar — assistant only */}
-                {msg.role === 'assistant' && (
-                  <ActionToolbar
-                    msg={msg}
-                    isLast={isLastAssistant}
-                    isLoading={isLoading}
-                    onDelete={handleDeleteMessage}
-                    onRegenerate={handleRegenerate}
-                  />
-                )}
-
-                {/* User message delete (hover only) */}
-                {msg.role === 'user' && (
-                  <button
-                    onClick={() => handleDeleteMessage(msg.id)}
-                    title="Delete message"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-slate-400 hover:text-red-500 px-1"
-                  >
-                    Delete
-                  </button>
-                )}
-              </div>
-
-              {msg.role === 'user' && (
-                <div className="w-7 h-7 rounded-full bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-xs ml-2 mt-0.5 flex-shrink-0" aria-hidden="true">👤</div>
-              )}
-            </div>
-          );
-        })}
+        {messages.map((msg, idx) => (
+          <MessageBubble
+            key={msg.id}
+            msg={msg}
+            isLastAssistant={idx === lastAssistantIdx}
+            isLoading={isLoading}
+            onDelete={handleDeleteMessage}
+            onRegenerate={handleRegenerate}
+          />
+        ))}
 
         {/* Typing indicator */}
         {isLoading && messages[messages.length - 1]?.content === '' && (
