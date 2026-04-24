@@ -16,7 +16,8 @@ export const KnowledgeBaseStatus: React.FC<Props> = ({ refreshKey }) => {
     catch { setError(true); }
   }, []);
 
-  useEffect(() => { fetchHealth(); const t = setInterval(fetchHealth, 5000); return () => clearInterval(t); }, [fetchHealth, refreshKey]);
+  // Poll every 30 s — KB changes only on upload/delete, not continuously
+  useEffect(() => { fetchHealth(); const t = setInterval(fetchHealth, 30_000); return () => clearInterval(t); }, [fetchHealth, refreshKey]);
 
   const handleDelete = async (sourceId: string) => {
     setDeleting(sourceId);

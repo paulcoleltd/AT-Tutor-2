@@ -23,7 +23,8 @@ export const ProviderSwitcher: React.FC<Props> = ({ onSwitch }) => {
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 3000);
+    // Poll every 30 s — provider changes only on explicit user action
+    const t = setInterval(refresh, 30_000);
     return () => clearInterval(t);
   }, [refresh]);
 

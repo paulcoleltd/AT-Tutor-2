@@ -22,8 +22,8 @@ const app = express();
 app.use(helmet());
 
 const allowedOrigins = process.env.ALLOWED_ORIGIN
-  ? [process.env.ALLOWED_ORIGIN, 'http://localhost:5173', 'http://127.0.0.1:5173']
-  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+  ? [process.env.ALLOWED_ORIGIN, 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174']
+  : ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174'];
 
 app.use(cors({
   origin: (origin, cb) => {
@@ -36,20 +36,24 @@ app.use(cors({
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '1mb' }));
 
+// Routes exempt from rate limiting (lightweight status polls — high frequency, no cost)
+const RATE_LIMIT_SKIP = ['/api/health', '/api/config/provider'];
+
 function makeLimit(max: number, windowMs = CONFIG.rateLimitWindowMs) {
   return rateLimit({
     windowMs, max,
     standardHeaders: true,
     legacyHeaders:   false,
     message:         { error: 'Too many requests. Please slow down.' },
+    skip: (req) => RATE_LIMIT_SKIP.some(path => req.path === path || req.originalUrl === path),
   });
 }
 
-// Broad limit for all /api routes
+// Broad limit for all /api routes (health + config/provider polls are skipped above)
 app.use('/api', makeLimit(CONFIG.rateLimitMax));
 
 // Tighter per-route limits for expensive operations
-app.use('/api/tts',        makeLimit(10));   // TTS: max 10 req/window (paid audio synthesis)
+app.use('/api/tts',        makeLimit(30));   // TTS: max 30 req/window (audio synthesis)
 app.use('/api/upload',     makeLimit(20));   // File upload: max 20 req/window
 app.use('/api/upload/url', makeLimit(15));   // URL ingest: max 15 req/window (outbound fetch)
 
