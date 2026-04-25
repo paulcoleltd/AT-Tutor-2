@@ -105,15 +105,7 @@ const ActionToolbar: React.FC<ToolbarProps> = ({ msg, isLast, isLoading, onDelet
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for non-secure contexts
-      const ta = document.createElement('textarea');
-      ta.value = msg.content;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      // Clipboard API unavailable — silently ignore; copy button stays as-is
     }
   };
 
@@ -320,7 +312,7 @@ interface Props {
   onKbRefresh?: () => void;               // tells App to refresh KB status panel
 }
 
-export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvider, onProviderSwitch, onNavigateMedia, onKbRefresh }) => {
+export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwitch, onNavigateMedia, onKbRefresh }) => {
   const [messages,      setMessages]      = useState<Message[]>([WELCOME]);
   const [input,         setInput]         = useState('');
   const [mode,          setMode]          = useState<TeachMode>('explain');
@@ -337,6 +329,8 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
   const [focusSourceUrl, setFocusSourceUrl] = useState<string | undefined>(undefined);
 
   const bottomRef     = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
   const resolvedPersona = persona === 'Custom role...' ? (customPersona.trim() || 'AI Tutor') : persona;
   const textareaRef   = useRef<HTMLTextAreaElement>(null);
   const abortRef      = useRef<AbortController | null>(null);
@@ -362,7 +356,66 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
   // Keep a ref to the last user message + mode so Regenerate can replay it
   const lastUserTurnRef = useRef<{ text: string; mode: TeachMode; image?: ImageAttachment } | null>(null);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isLoading]);
+  // Track whether user has scrolled away from the bottom
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollBtn(distFromBottom > 120);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Auto-scroll only when user is already near the bottom (don't hijack manual scroll)
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distFromBottom < 200) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isLoading]);
+
+  const scrollToBottom = useCallback(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setShowScrollBtn(false);
+  }, []);
+
+  // Export the conversation as a Markdown file download
+  const handleExport = useCallback(() => {
+    const exportable = messages.filter(m => m.id !== WELCOME.id && !m.streaming);
+    if (exportable.length === 0) return;
+    const lines: string[] = [
+      `# AI Tutor Chat Export`,
+      `**Role:** ${resolvedPersona}`,
+      `**Exported:** ${new Date().toLocaleString()}`,
+      '',
+      '---',
+      '',
+    ];
+    for (const msg of exportable) {
+      if (msg.role === 'user') {
+        lines.push(`## You\n\n${msg.content}\n`);
+      } else {
+        lines.push(`## AI Tutor (${resolvedPersona})\n\n${msg.content}\n`);
+        if (msg.sources && msg.sources.length > 0) {
+          lines.push(`*Sources: ${msg.sources.join(', ')}*\n`);
+        }
+      }
+      lines.push('---\n');
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `ai-tutor-chat-${new Date().toISOString().slice(0, 10)}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [messages, resolvedPersona]);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -664,6 +717,20 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
               />
             )}
           </div>
+          {/* Export chat as Markdown */}
+          <button
+            onClick={handleExport}
+            disabled={messages.length <= 1}
+            title="Export chat as Markdown"
+            aria-label="Export chat"
+            className="text-blue-100 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
+              <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
+            </svg>
+          </button>
+
           <button onClick={handleClear} title="Clear history" aria-label="Clear history"
             className="text-blue-100 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-all">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
@@ -711,7 +778,7 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto chat-scroll px-4 py-4 space-y-3" role="log" aria-label="Conversation">
+      <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto chat-scroll px-4 py-4 space-y-3" role="log" aria-label="Conversation">
         {/* Trim notice — shown when the cap has been hit */}
         {messages.length >= MAX_MESSAGES && (
           <div className="text-center text-[10px] text-slate-400 dark:text-slate-500 py-1 select-none">
@@ -744,6 +811,19 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
           </div>
         )}
         <div ref={bottomRef} />
+
+        {/* Scroll-to-bottom floating button */}
+        {showScrollBtn && (
+          <button
+            onClick={scrollToBottom}
+            aria-label="Scroll to latest message"
+            className="absolute bottom-4 right-4 z-10 w-8 h-8 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center hover:bg-blue-700 transition-all"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M10 3a.75.75 0 01.75.75v10.638l3.96-4.158a.75.75 0 111.08 1.04l-5.25 5.5a.75.75 0 01-1.08 0l-5.25-5.5a.75.75 0 111.08-1.04l3.96 4.158V3.75A.75.75 0 0110 3z" clipRule="evenodd" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Input area */}
