@@ -54,10 +54,11 @@ export async function deleteDocument(sourceId: string): Promise<void> {
 }
 
 export async function sendMessage(message: string, mode: TeachMode, sessionId: string, persona?: string): Promise<ChatResult> {
+  const safePersona = persona?.trim().slice(0, 80);
   return handle<ChatResult>(await fetch(`${BASE_URL}/chat`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ message, mode, sessionId, persona }),
+    body:    JSON.stringify({ message, mode, sessionId, persona: safePersona }),
   }));
 }
 
@@ -70,7 +71,8 @@ export async function* streamMessage(
   focusSourceId?: string,
   persona?: string,
 ): AsyncGenerator<StreamEvent> {
-  const body: Record<string, unknown> = { message, mode, sessionId, stream: true, persona };
+  const safePersona = persona?.trim().slice(0, 80);
+  const body: Record<string, unknown> = { message, mode, sessionId, stream: true, persona: safePersona };
   if (image)         { body.imageBase64 = image.base64; body.imageMimeType = image.mimeType; }
   if (focusSourceId) { body.focusSourceId = focusSourceId; }
   const res = await fetch(`${BASE_URL}/chat`, {

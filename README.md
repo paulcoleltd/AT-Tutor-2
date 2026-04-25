@@ -56,7 +56,17 @@ npm run dev
 # → http://localhost:5173
 ```
 
-### 4. Open the App
+### 4. Environment variables for deployment
+
+When deploying to Vercel, add the following environment variables in the Vercel dashboard for the project:
+
+- `OPENAI_API_KEY`
+- `CLAUDE_API_KEY` (optional if using Claude)
+- `GEMINI_API_KEY` (optional if using Gemini)
+- `LLM_PROVIDER` (one of `openai`, `claude`, `gemini`)
+- `ALLOWED_ORIGIN` set to your Vercel app URL, e.g. `https://your-app.vercel.app`
+
+### 5. Open the App
 
 Visit **http://localhost:5173**, upload a document, and start learning.
 
@@ -129,6 +139,15 @@ AI Tutor Agent/
 Modes: `explain` · `quiz` · `chat` · `summarize` · `flashcard`
 
 ---
+
+## Security hardening
+- `persona` input is limited, sanitized, and stripped of line breaks before reaching the backend.
+- Custom role text is capped to 80 characters and normalized to prevent prompt-injection payloads.
+- `/api/chat` validates all request fields and rejects malformed image payloads.
+- Express now disables `x-powered-by`, reducing server fingerprint exposure.
+
+> Keep `SECURITY.md` updated whenever security-related fixes, validation changes, or deployment hardening are added.
+> Use Dependabot and CI to catch vulnerable dependency upgrades automatically.
 
 ## Deployment
 

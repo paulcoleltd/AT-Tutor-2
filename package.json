@@ -1,0 +1,11 @@
+{
+  "name": "ai-tutor-agent",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm --prefix backend run build && npm --prefix frontend run build"
+  }
+}

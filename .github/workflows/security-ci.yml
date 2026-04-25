@@ -1,0 +1,34 @@
+name: Security CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  backend:
+    name: Backend build + audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: cd backend && npm install
+      - run: cd backend && npm run build
+      - run: cd backend && npm run audit
+
+  frontend:
+    name: Frontend build + audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: cd frontend && npm install
+      - run: cd frontend && npm run build
+      - run: cd frontend && npm run audit

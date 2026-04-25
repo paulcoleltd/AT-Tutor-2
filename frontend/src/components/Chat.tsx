@@ -20,7 +20,15 @@ function isVideoUrl(url: string): boolean {
 function isAudioUrl(url: string): boolean {
   return /\.(mp3|wav|m4a|ogg|flac|aac)(\?|$)/i.test(url);
 }
-
+function sanitizePersonaInput(value: string): string {
+  return value
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/ASSIGNED ROLE\s*[:]?|INSTRUCTION\s*[:]?|USER SAID\s*[:]?/gi, '')
+    .replace(/[`"'<>]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .slice(0, 80);
+}
 export interface Message {
   id:        string;
   role:      'user' | 'assistant';
@@ -649,8 +657,9 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
               <input
                 type="text"
                 value={customPersona}
-                onChange={e => setCustomPersona(e.target.value)}
+                onChange={e => setCustomPersona(sanitizePersonaInput(e.target.value))}
                 placeholder="Describe the role..."
+                maxLength={80}
                 className="rounded-lg bg-white text-slate-800 text-xs px-2 py-1 focus:outline-none focus:ring-2 focus:ring-white/70 w-40"
               />
             )}

@@ -8,13 +8,20 @@ const ALLOWED_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'
 const ChatBodySchema = z.object({
   message:        z.string().min(1).max(4000),
   mode:           z.enum(['explain', 'quiz', 'chat', 'summarize', 'flashcard']).optional().default('explain'),
-  persona:        z.string().max(128).optional(),
+  persona:        z.string().trim().max(80).regex(/^[^\r\n]*$/, 'Persona cannot contain line breaks.').optional(),
   sessionId:      z.string().uuid().optional(),
   stream:         z.boolean().optional().default(false),
   // Base64 limit: ~1 MB binary → ~1.37 MB base64; express.json limit is 1 MB so this is a belt-and-suspenders cap
   imageBase64:    z.string().max(1_400_000).optional(),
   imageMimeType:  z.enum(ALLOWED_IMAGE_MIME).optional(),
   focusSourceId:  z.string().uuid().optional(),
+}).superRefine((data, ctx) => {
+  if ((data.imageBase64 && !data.imageMimeType) || (!data.imageBase64 && data.imageMimeType)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'imageBase64 and imageMimeType must be provided together.',
+    });
+  }
 });
 
 const ANONYMOUS_SESSION = 'anonymous';
