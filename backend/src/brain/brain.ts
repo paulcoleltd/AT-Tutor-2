@@ -18,13 +18,13 @@ export class Brain {
     const queryEmbedding = await embedText(query);
 
     if (focusSourceId) {
-      const { items, hadSourceHits } = this.store.searchFromSource(queryEmbedding, focusSourceId, topK);
+      const { items, hadSourceHits } = this.store.searchFromSourceHybrid(queryEmbedding, query, focusSourceId, topK);
       const chunks  = items.map(r => r.text);
       const sources = [...new Set(items.map(r => r.metadata.filename as string))];
       return { chunks, sources, focusSourceHit: hadSourceHits };
     }
 
-    const results = this.store.search(queryEmbedding, topK);
+    const results = this.store.searchHybrid(queryEmbedding, query, topK);
     const chunks  = results.map(r => r.text);
     const sources = [...new Set(results.map(r => r.metadata.filename as string))];
     return { chunks, sources };

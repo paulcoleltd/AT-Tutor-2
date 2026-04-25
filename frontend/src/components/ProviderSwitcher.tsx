@@ -76,7 +76,8 @@ export const ProviderSwitcher: React.FC<Props> = ({ onSwitch }) => {
         })}
       </div>
       <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
-        Say <strong>"Hey Agent 1"</strong>, <strong>"Agent 2"</strong>, or <strong>"Agent 3"</strong> to switch by voice
+        Say <strong>"Hey Agent 1"</strong>, <strong>"Agent 2"</strong>, or <strong>"Agent 3"</strong> to switch by voice.
+        {available.length > 1 && ' Auto-fallback across providers is enabled for more robust responses.'}
       </p>
     </div>
   );

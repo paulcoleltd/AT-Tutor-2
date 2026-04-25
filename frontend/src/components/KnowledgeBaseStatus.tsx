@@ -3,10 +3,16 @@ import { getHealth, deleteDocument } from '../lib/api';
 
 interface Source { sourceId: string; filename: string; chunks: number; type: string; }
 
+interface HealthResponse {
+  provider: string;
+  availableProviders?: string[];
+  knowledgeBase: { totalChunks: number; sources: Source[] };
+}
+
 interface Props { refreshKey?: number; }
 
 export const KnowledgeBaseStatus: React.FC<Props> = ({ refreshKey }) => {
-  const [health,        setHealth]        = useState<{ provider: string; knowledgeBase: { totalChunks: number; sources: Source[] } } | null>(null);
+  const [health,        setHealth]        = useState<HealthResponse | null>(null);
   const [error,         setError]         = useState(false);
   const [errorDismissed, setErrorDismissed] = useState(false);
   const [deleting,      setDeleting]      = useState<string | null>(null);
@@ -94,9 +100,16 @@ export const KnowledgeBaseStatus: React.FC<Props> = ({ refreshKey }) => {
         <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-1">No documents yet.</p>
       )}
 
-      <div className="mt-2 flex items-center gap-1 text-xs text-slate-400">
-        <span className="w-1.5 h-1.5 bg-green-400 rounded-full inline-block" />
-        Provider: <strong className="text-slate-500 dark:text-slate-300 ml-0.5">{health.provider}</strong>
+      <div className="mt-2 space-y-1 text-xs text-slate-400">
+        <div className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 bg-green-400 rounded-full inline-block" />
+          Provider: <strong className="text-slate-500 dark:text-slate-300 ml-0.5">{health.provider}</strong>
+        </div>
+        {health.availableProviders && health.availableProviders.length > 1 && (
+          <div className="text-[10px] text-slate-500 dark:text-slate-400">
+            ⚡ Auto-fallback enabled across providers: {health.availableProviders.join(', ')}
+          </div>
+        )}
       </div>
     </div>
   );

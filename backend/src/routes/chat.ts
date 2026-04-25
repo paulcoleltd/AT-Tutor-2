@@ -8,6 +8,7 @@ const ALLOWED_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'
 const ChatBodySchema = z.object({
   message:        z.string().min(1).max(4000),
   mode:           z.enum(['explain', 'quiz', 'chat', 'summarize', 'flashcard']).optional().default('explain'),
+  persona:        z.string().max(128).optional(),
   sessionId:      z.string().uuid().optional(),
   stream:         z.boolean().optional().default(false),
   // Base64 limit: ~1 MB binary → ~1.37 MB base64; express.json limit is 1 MB so this is a belt-and-suspenders cap
@@ -28,8 +29,9 @@ export function createChatRouter(agent: TeacherAgent): Router {
       return;
     }
 
-    const { message, mode, sessionId = ANONYMOUS_SESSION, stream, imageBase64, imageMimeType, focusSourceId } = parsed.data;
+    const { message, mode, persona, sessionId = ANONYMOUS_SESSION, stream, imageBase64, imageMimeType, focusSourceId } = parsed.data;
     const imageData = imageBase64 && imageMimeType ? { base64: imageBase64, mimeType: imageMimeType } : undefined;
+    const assignedPersona = persona?.trim() || 'AI Tutor';
 
     // ── Streaming path (SSE) ──────────────────────────────────────────────────
     if (stream) {
@@ -39,7 +41,7 @@ export function createChatRouter(agent: TeacherAgent): Router {
       res.flushHeaders();
 
       try {
-        for await (const event of agent.stream(message, mode as TeachMode, sessionId, imageData, focusSourceId)) {
+        for await (const event of agent.stream(message, mode as TeachMode, sessionId, imageData, focusSourceId, assignedPersona)) {
           res.write(`data: ${JSON.stringify(event)}\n\n`);
         }
       } catch (err) {
@@ -55,7 +57,7 @@ export function createChatRouter(agent: TeacherAgent): Router {
 
     // ── Non-streaming path ────────────────────────────────────────────────────
     try {
-      const result = await agent.ask(message, mode as TeachMode, sessionId);
+      const result = await agent.ask(message, mode as TeachMode, sessionId, assignedPersona);
       res.status(200).json(result);
     } catch (err) {
       if (err instanceof LLMError) {

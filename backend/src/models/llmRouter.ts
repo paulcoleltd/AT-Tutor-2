@@ -1,5 +1,5 @@
 import { CONFIG } from '../config';
-import { getActiveProvider } from '../runtimeConfig';
+import { getActiveProvider, LLMProvider } from '../runtimeConfig';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -8,9 +8,40 @@ let _openai: OpenAI | null = null;
 let _anthropic: Anthropic | null = null;
 let _genAI: GoogleGenerativeAI | null = null;
 
+const PROVIDER_ORDER: LLMProvider[] = ['openai', 'claude', 'gemini'];
+
 function getOpenAI()    { if (!CONFIG.openaiApiKey) throw new Error('OPENAI_API_KEY not set.'); return _openai    ??= new OpenAI({ apiKey: CONFIG.openaiApiKey }); }
 function getAnthropic() { if (!CONFIG.claudeApiKey) throw new Error('CLAUDE_API_KEY not set.'); return _anthropic ??= new Anthropic({ apiKey: CONFIG.claudeApiKey }); }
 function getGenAI()     { if (!CONFIG.geminiApiKey) throw new Error('GEMINI_API_KEY not set.'); return _genAI     ??= new GoogleGenerativeAI(CONFIG.geminiApiKey); }
+
+export function getAvailableProviders(): LLMProvider[] {
+  return PROVIDER_ORDER.filter(provider => {
+    if (provider === 'openai')  return !!CONFIG.openaiApiKey;
+    if (provider === 'claude')  return !!CONFIG.claudeApiKey;
+    if (provider === 'gemini')  return !!CONFIG.geminiApiKey;
+    return false;
+  });
+}
+
+function getProviderFallbackOrder(): LLMProvider[] {
+  const active = getActiveProvider();
+  const available = getAvailableProviders();
+  return [active, ...available.filter(p => p !== active)];
+}
+
+async function callProvider(provider: LLMProvider, system: string, user: string, history: Message[]): Promise<string> {
+  if (provider === 'openai')  return await callOpenAI(system, user, history);
+  if (provider === 'claude')  return await callClaude(system, user, history);
+  if (provider === 'gemini')  return await callGemini(system, user, history);
+  throw new LLMError(`Unsupported provider: ${provider}`, provider);
+}
+
+async function* streamProvider(provider: LLMProvider, system: string, user: string, history: Message[]): AsyncGenerator<string, void, unknown> {
+  if (provider === 'openai')  yield* streamOpenAI(system, user, history);
+  else if (provider === 'claude') yield* streamClaude(system, user, history);
+  else if (provider === 'gemini') yield* streamGemini(system, user, history);
+  else throw new LLMError(`Unsupported provider: ${provider}`, provider);
+}
 
 export type Role = 'user' | 'assistant' | 'system';
 export interface Message { role: Role; content: string; }
@@ -24,25 +55,49 @@ export class LLMError extends Error {
 
 // ── Non-streaming ─────────────────────────────────────────────────────────────
 export async function callLLM(system: string, user: string, history: Message[]): Promise<string> {
-  try {
-    if (getActiveProvider() === 'openai')  return await callOpenAI(system, user, history);
-    if (getActiveProvider() === 'claude')  return await callClaude(system, user, history);
-    if (getActiveProvider() === 'gemini')  return await callGemini(system, user, history);
-    throw new LLMError(`Unsupported provider: ${getActiveProvider()}`, getActiveProvider());
-  } catch (err) {
-    if (err instanceof LLMError) throw err;
-    throw new LLMError(`Unexpected error from ${getActiveProvider()}: ${(err as Error).message}`, getActiveProvider(), err);
+  const providers = getProviderFallbackOrder();
+  const errors: string[] = [];
+
+  for (const provider of providers) {
+    try {
+      return await callProvider(provider, system, user, history);
+    } catch (err) {
+      const providerErr = err instanceof LLMError ? err : new LLMError(`Unexpected error from ${provider}: ${(err as Error).message}`, provider, err);
+      errors.push(`${provider}: ${providerErr.message}`);
+      if (provider === getActiveProvider()) continue; // try fallback providers
+      continue;
+    }
   }
+
+  throw new LLMError(`All configured providers failed: ${errors.join(' | ')}`, getActiveProvider());
 }
 
 // ── Streaming — yields token chunks ──────────────────────────────────────────
 export async function* streamLLM(
   system: string, user: string, history: Message[]
 ): AsyncGenerator<string, void, unknown> {
-  if (getActiveProvider() === 'openai')  yield* streamOpenAI(system, user, history);
-  else if (getActiveProvider() === 'claude') yield* streamClaude(system, user, history);
-  else if (getActiveProvider() === 'gemini') yield* streamGemini(system, user, history);
-  else throw new LLMError(`Unsupported provider: ${getActiveProvider()}`, getActiveProvider());
+  const providers = getProviderFallbackOrder();
+  let lastError: Error | null = null;
+
+  for (const provider of providers) {
+    try {
+      yield* streamProvider(provider, system, user, history);
+      return;
+    } catch (err) {
+      const providerErr = err instanceof LLMError ? err : new LLMError(`Unexpected error from ${provider}: ${(err as Error).message}`, provider, err);
+      lastError = providerErr;
+      // Only attempt fallback if the provider failed before or immediately after startup
+      // otherwise partial output may already have been streamed and cannot be safely retried.
+      if (providerErr.message.includes('Empty response') || providerErr.message.includes('API key') || providerErr.message.includes('unsupported') || providerErr.message.includes('server error')) {
+        continue;
+      }
+      throw providerErr;
+    }
+  }
+
+  throw lastError instanceof LLMError
+    ? lastError
+    : new LLMError('All configured providers failed to stream a response.', getActiveProvider(), lastError);
 }
 
 // ── OpenAI ───────────────────────────────────────────────────────────────────

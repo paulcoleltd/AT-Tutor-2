@@ -5,7 +5,7 @@ type MediaType = 'video' | 'audio' | 'youtube' | 'vimeo' | 'unknown';
 
 function detectMediaType(url: string): MediaType {
   const u = url.toLowerCase();
-  if (/youtube\.com\/watch|youtu\.be\/|youtube\.com\/embed/.test(u)) return 'youtube';
+  if (/youtube\.com\/(?:watch\?|shorts\/)|youtu\.be\/|youtube\.com\/embed\//.test(u)) return 'youtube';
   if (/vimeo\.com/.test(u)) return 'vimeo';
   if (/\.(mp4|webm|mov|avi|mkv|ogv)(\?|$)/.test(u)) return 'video';
   if (/\.(mp3|wav|m4a|ogg|flac|aac)(\?|$)/.test(u)) return 'audio';
@@ -14,14 +14,16 @@ function detectMediaType(url: string): MediaType {
 
 function toEmbedUrl(url: string, type: MediaType): string {
   if (type === 'youtube') {
-    const idMatch = url.match(/(?:youtu\.be\/|[?&]v=|\/embed\/)([A-Za-z0-9_-]{11})/);
+    const idMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?.*?v=|embed\/|shorts\/))([A-Za-z0-9_-]{11})/);
     const id = idMatch?.[1] ?? '';
+    if (!id) return url;
     // vq=hd1080 requests 1080p; hd=1 enables HD mode; cc_load_policy=0 hides captions overlay
     return `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1&hd=1&vq=hd1080&playsinline=1`;
   }
   if (type === 'vimeo') {
     const idMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
     const id = idMatch?.[1] ?? '';
+    if (!id) return url;
     // quality=1080p pins playback to 1080p; transparent=0 removes Vimeo logo overlay
     return `https://player.vimeo.com/video/${id}?badge=0&autopause=0&quality=1080p&transparent=0&dnt=1`;
   }
@@ -38,11 +40,13 @@ export const MediaPlayer: React.FC<Props> = ({ onMediaLoaded, externalUrl, onExt
   const [url,        setUrl]        = useState('');
   const [activeUrl,  setActiveUrl]  = useState('');
   const [mediaType,  setMediaType]  = useState<MediaType>('unknown');
+  const [renderType, setRenderType] = useState<MediaType>('unknown');
   const [error,      setError]      = useState('');
   const [speed,      setSpeed]      = useState(1);
   const [isExpanded, setIsExpanded] = useState(false);
   const [ingesting,  setIngesting]  = useState(false);
   const [ingestMsg,  setIngestMsg]  = useState('');
+  const [mediaFallback, setMediaFallback] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -56,10 +60,12 @@ export const MediaPlayer: React.FC<Props> = ({ onMediaLoaded, externalUrl, onExt
       setTimeout(() => {
         const type = detectMediaType(externalUrl);
         setMediaType(type);
+        setRenderType(type === 'unknown' ? 'video' : type);
         setActiveUrl(type === 'youtube' || type === 'vimeo' ? toEmbedUrl(externalUrl, type) : externalUrl);
         setIsExpanded(true);
         setError('');
         setIngestMsg('');
+        setMediaFallback(false);
       }, 0);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -72,8 +78,10 @@ export const MediaPlayer: React.FC<Props> = ({ onMediaLoaded, externalUrl, onExt
     setIngestMsg('');
     const type = detectMediaType(trimmed);
     setMediaType(type);
+    setRenderType(type === 'unknown' ? 'video' : type);
     setActiveUrl(type === 'youtube' || type === 'vimeo' ? toEmbedUrl(trimmed, type) : trimmed);
     setIsExpanded(true);
+    setMediaFallback(false);
 
     // Auto-ingest page/video into KB so the agent can answer questions about it
     if (type === 'youtube' || type === 'vimeo' || type === 'unknown') {
@@ -101,6 +109,12 @@ export const MediaPlayer: React.FC<Props> = ({ onMediaLoaded, externalUrl, onExt
   };
 
   const handleError = () => {
+    if (mediaType === 'unknown' && !mediaFallback) {
+      setMediaFallback(true);
+      setRenderType('audio');
+      setError('Trying audio playback fallback...');
+      return;
+    }
     setError('Could not load media. Check the URL or try a direct MP4/WebM link.');
   };
 
@@ -152,6 +166,8 @@ export const MediaPlayer: React.FC<Props> = ({ onMediaLoaded, externalUrl, onExt
             <br />
             <span className="text-blue-400">Any length — streams directly, no size limit</span>
             <br />
+            <span className="text-indigo-400">Any URL is tried immediately; unknown links are played with a media fallback.</span>
+            <br />
             <span className="text-indigo-400">YouTube/Vimeo URLs are auto-added to KB so you can ask questions about them</span>
           </p>
 
@@ -176,7 +192,7 @@ export const MediaPlayer: React.FC<Props> = ({ onMediaLoaded, externalUrl, onExt
           {/* Player */}
           {activeUrl && (
             <div className="space-y-2">
-              {(mediaType === 'youtube' || mediaType === 'vimeo') && (
+              {(renderType === 'youtube' || renderType === 'vimeo') && (
                 <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ paddingTop: '56.25%' }}>
                   <iframe
                     src={activeUrl}
@@ -188,7 +204,7 @@ export const MediaPlayer: React.FC<Props> = ({ onMediaLoaded, externalUrl, onExt
                 </div>
               )}
 
-              {mediaType === 'video' && (
+              {renderType === 'video' && (
                 <video
                   ref={videoRef}
                   controls
@@ -205,7 +221,7 @@ export const MediaPlayer: React.FC<Props> = ({ onMediaLoaded, externalUrl, onExt
                 </video>
               )}
 
-              {mediaType === 'audio' && (
+              {renderType === 'audio' && (
                 <audio
                   ref={audioRef}
                   controls
@@ -216,7 +232,7 @@ export const MediaPlayer: React.FC<Props> = ({ onMediaLoaded, externalUrl, onExt
                 />
               )}
 
-              {mediaType === 'unknown' && (
+              {mediaType === 'unknown' && !activeUrl && (
                 <div className="bg-slate-100 dark:bg-slate-700 rounded-xl p-3 text-xs text-slate-500 dark:text-slate-400 text-center">
                   ⚠️ Could not detect media type. Try a direct .mp4 or YouTube link.
                 </div>

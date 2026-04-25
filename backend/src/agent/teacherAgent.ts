@@ -23,19 +23,25 @@ const MODE_INSTRUCTIONS: Record<TeachMode, string> = {
 };
 
 const SYSTEM_PROMPT =
-  'You are a friendly, expert AI Tutor with access to a live knowledge base of documents and web pages.\n\n' +
+  'You are a highly adaptable AI assistant with access to a live knowledge base of documents and web pages.\n\n' +
   'ANSWER PRIORITY RULES — follow these in order:\n' +
   '1. SOURCE-FIRST: When KNOWLEDGE BASE CONTEXT is provided and contains relevant information, answer from it first. ' +
   'Clearly state which source you are drawing from (e.g. "Based on [filename]…").\n' +
   '2. TRANSPARENCY: If the knowledge base context is present but does NOT fully answer the question, say so explicitly: ' +
   '"The source [filename] does not contain this specific information." Then continue with general knowledge.\n' +
-  '3. RECENCY AWARENESS: If the answer from the knowledge base may be outdated (e.g. the page was fetched at a point in time), ' +
+  '3. VERIFICATION: If a fact cannot be supported by the provided knowledge base, do not invent it. ' +
+  'Instead, say that the knowledge base does not contain enough information and then answer from general knowledge only if appropriate.\n' +
+  '4. ROLE ADAPTATION: If the user assigns a role or persona, adopt that style and voice while staying helpful, polite, and accurate. ' +
+  'For example, if asked to act as a receptionist, be friendly, courteous, and concise. If asked to act as a subject-matter expert, be precise and clear. ' +
+  'Begin your first response by confirming the assigned role and how you will help.\n' +
+  '5. PROVENANCE: Whenever you answer from the knowledge base, cite the source by filename or URL. ' +
+  'If you are answering from general knowledge, say that the current document set does not contain a direct answer.\n' +
+  '6. RECENCY AWARENESS: If the answer from the knowledge base may be outdated (e.g. the page was fetched at a point in time), ' +
   'note this: "This information is from the loaded source and may not reflect the latest updates. ' +
   'Based on my general knowledge, the current situation is: …"\n' +
-  '4. FALLBACK: If no relevant context exists in the knowledge base, answer from general knowledge and state: ' +
-  '"I am answering from general knowledge as this topic is not in the current knowledge base."\n\n' +
-  'You explain concepts with simple language, examples, and analogies. ' +
-  'Format responses in Markdown. Keep responses engaging and educational.';
+  '7. FOLLOW-UP: After answering, offer one quick next step such as a summary, quiz, comparison, or action plan if it fits the conversation.\n\n' +
+  'You explain concepts with simple language, examples, and analogies when appropriate. ' +
+  'Format responses in Markdown. Keep responses engaging and interactive.';
 
 export class TeacherAgent {
   constructor(
@@ -43,7 +49,7 @@ export class TeacherAgent {
     private readonly sessions: SessionStore,
   ) {}
 
-  async ask(userText: string, mode: TeachMode = 'explain', sessionId: string): Promise<TeachResponse> {
+  async ask(userText: string, mode: TeachMode = 'explain', sessionId: string, persona?: string): Promise<TeachResponse> {
     if (!userText?.trim()) throw new Error('TeacherAgent.ask: userText must not be empty.');
 
     const { chunks, sources } = await this.brain.retrieve(userText);
@@ -52,7 +58,7 @@ export class TeacherAgent {
       : '(No documents uploaded yet. Answer from general knowledge.)';
 
     const instruction = MODE_INSTRUCTIONS[mode] ?? MODE_INSTRUCTIONS.explain;
-    const userPrompt  = buildPrompt(contextStr, instruction, userText);
+    const userPrompt  = buildPrompt(contextStr, instruction, userText, persona);
     const history     = this.sessions.getHistory(sessionId);
 
     let answer: string;
@@ -67,7 +73,7 @@ export class TeacherAgent {
     return { answer, sources };
   }
 
-  async *stream(userText: string, mode: TeachMode = 'explain', sessionId: string, imageData?: ImageData, focusSourceId?: string): AsyncGenerator<{ token?: string; sources?: string[]; done?: boolean }> {
+  async *stream(userText: string, mode: TeachMode = 'explain', sessionId: string, imageData?: ImageData, focusSourceId?: string, persona?: string): AsyncGenerator<{ token?: string; sources?: string[]; done?: boolean }> {
     if (!userText?.trim()) throw new Error('TeacherAgent.stream: userText must not be empty.');
 
     const { chunks, sources, focusSourceHit }: RetrievalResult = await this.brain.retrieve(userText, undefined, focusSourceId);
@@ -81,7 +87,7 @@ export class TeacherAgent {
     }
 
     const instruction = MODE_INSTRUCTIONS[mode] ?? MODE_INSTRUCTIONS.explain;
-    const userPrompt  = buildPrompt(contextStr, instruction, userText);
+    const userPrompt  = buildPrompt(contextStr, instruction, userText, persona);
     const history     = this.sessions.getHistory(sessionId);
 
     // Emit sources first so the client can show them immediately
@@ -105,6 +111,9 @@ export class TeacherAgent {
   }
 }
 
-function buildPrompt(context: string, instruction: string, userText: string): string {
-  return `CONTEXT FROM KNOWLEDGE BASE:\n${context}\n\nINSTRUCTION:\n${instruction}\n\nUSER SAID:\n${userText}`.trim();
+function buildPrompt(context: string, instruction: string, userText: string, persona?: string): string {
+  const roleBlock = persona?.trim()
+    ? `ASSIGNED ROLE:\n${persona.trim()}\n\n`
+    : '';
+  return `CONTEXT FROM KNOWLEDGE BASE:\n${context}\n\n${roleBlock}INSTRUCTION:\n${instruction}\n\nUSER SAID:\n${userText}`.trim();
 }

@@ -37,7 +37,7 @@ function makeId() { return `${Date.now()}-${Math.random().toString(36).slice(2)}
 const WELCOME: Message = {
   id:        makeId(),
   role:      'assistant',
-  content:   "Hi! 👋 I'm your **AI Tutor**. Upload a document on the left, then ask me anything about it.\n\nI can **explain** concepts, give you a **quiz**, generate a **summary**, create **flashcards**, or just **chat**!\n\nYou can also attach an 🖼️ image to your message for visual analysis.",
+  content:   "Hi! 👋 I'm your **AI Tutor**. Upload a document on the left, then ask me anything about it.\n\nI can **explain** concepts, give you a **quiz**, generate a **summary**, create **flashcards**, or just **chat**!\n\nChoose a role above like **Receptionist** or **Brainy Expert** and I will adopt that persona in my answers. You can also attach an 🖼️ image to your message for visual analysis.",
   timestamp: new Date(),
 };
 
@@ -48,6 +48,17 @@ const MODE_META: Record<TeachMode, { label: string; icon: string; tip: string }>
   summarize: { label: 'Summarize',  icon: '📋', tip: 'Structured summary of uploaded docs' },
   flashcard: { label: 'Flashcards', icon: '🃏', tip: 'Generate 5 Q&A flashcard pairs' },
 };
+
+const ROLE_OPTIONS = [
+  'AI Tutor',
+  'Receptionist',
+  'Brainy Expert',
+  'General Knowledge Agent',
+  'Creative Assistant',
+  'Custom role...'
+] as const;
+
+type RoleOption = (typeof ROLE_OPTIONS)[number];
 
 const AGENT_COMMANDS: { pattern: RegExp; provider: LLMProvider; name: string }[] = [
   // Match: "hey agent 1", "agent 1", "switch to claude", "use claude", "agent one"
@@ -305,20 +316,40 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
   const [messages,      setMessages]      = useState<Message[]>([WELCOME]);
   const [input,         setInput]         = useState('');
   const [mode,          setMode]          = useState<TeachMode>('explain');
+  const [persona,       setPersona]       = useState<RoleOption>('AI Tutor');
+  const [customPersona, setCustomPersona] = useState('');
   const [isLoading,     setIsLoading]     = useState(false);
   const [speakEnabled,  setSpeakEnabled]  = useState(true); // auto-read every response by default
   const [lastAnswer,    setLastAnswer]    = useState<string>('');
   const [error,         setError]         = useState<string | null>(null);
   const [currentSessId, setCurrentSessId] = useState(sessionId);
+  const [isRoleLoaded,  setIsRoleLoaded]  = useState(false);
   const [pendingImage,   setPendingImage]   = useState<ImageAttachment | null>(null);
   const [focusSourceId,  setFocusSourceId]  = useState<string | undefined>(undefined);
   const [focusSourceUrl, setFocusSourceUrl] = useState<string | undefined>(undefined);
 
   const bottomRef     = useRef<HTMLDivElement>(null);
+  const resolvedPersona = persona === 'Custom role...' ? (customPersona.trim() || 'AI Tutor') : persona;
   const textareaRef   = useRef<HTMLTextAreaElement>(null);
   const abortRef      = useRef<AbortController | null>(null);
   const liveRegionRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isRoleLoaded) return;
+    const storedPersona = window.localStorage.getItem('ai-tutor-persona') as RoleOption | null;
+    const storedCustom = window.localStorage.getItem('ai-tutor-custom-persona') ?? '';
+    if (storedPersona && ROLE_OPTIONS.includes(storedPersona)) {
+      setPersona(storedPersona);
+      setCustomPersona(storedCustom);
+    }
+    setIsRoleLoaded(true);
+  }, [isRoleLoaded]);
+
+  useEffect(() => {
+    window.localStorage.setItem('ai-tutor-persona', persona);
+    window.localStorage.setItem('ai-tutor-custom-persona', customPersona);
+  }, [persona, customPersona]);
 
   // Keep a ref to the last user message + mode so Regenerate can replay it
   const lastUserTurnRef = useRef<{ text: string; mode: TeachMode; image?: ImageAttachment } | null>(null);
@@ -365,6 +396,7 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
     image?: ImageAttachment,
     replaceId?: string,        // if set, replace that message instead of appending
     explicitFocusId?: string,  // override focusSourceId state (needed when state not yet updated)
+    personaOverride?: string,
   ) => {
     setIsLoading(true);
     setError(null);
@@ -389,7 +421,7 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
 
       // explicitFocusId takes precedence over state (avoids stale closure after setFocusSourceId)
       const activeFocusId = explicitFocusId ?? focusSourceId;
-      for await (const event of streamMessage(userText, replyMode, sessId, abort.signal, image, activeFocusId)) {
+      for await (const event of streamMessage(userText, replyMode, sessId, abort.signal, image, activeFocusId, personaOverride ?? resolvedPersona)) {
         if (event.error)   { throw new Error(event.error); }
         if (event.sources) { sources = event.sources; }
         if (event.token) {
@@ -420,7 +452,7 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
       setIsLoading(false);
       abortRef.current = null;
     }
-  }, [speakText, focusSourceId]);
+  }, [speakText, focusSourceId, resolvedPersona]);
 
   // ── Voice transcript handler ────────────────────────────────────────────────
   // Intercepts dictated text before it reaches the input box.
@@ -506,7 +538,7 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
         // If there's a question in the message beyond the URL, answer it immediately
         const questionPart = trimmed.replace(navUrl, '').replace(NAV_PATTERN, '').replace(/^\s*(and\s+)?(then\s+)?/, '').trim();
         if (questionPart.length > 3) {
-          await streamReply(questionPart, mode, currentSessId, undefined, undefined, newSourceId);
+          await streamReply(questionPart, mode, currentSessId, undefined, undefined, newSourceId, resolvedPersona);
         }
       } catch (e: any) {
         setMessages(prev => prev.map(m =>
@@ -526,8 +558,8 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
     };
     setMessages(prev => cappedMessages(prev, userMsg));
 
-    await streamReply(trimmed, mode, currentSessId, attachedImage ?? undefined, undefined, focusSourceId);
-  }, [input, isLoading, mode, currentSessId, pendingImage, streamReply, onProviderSwitch]);
+    await streamReply(trimmed, mode, currentSessId, attachedImage ?? undefined, undefined, focusSourceId, resolvedPersona);
+  }, [input, isLoading, mode, currentSessId, pendingImage, streamReply, onProviderSwitch, resolvedPersona]);
 
   // Regenerate: find the user message before this assistant message and replay
   const handleRegenerate = useCallback(async (assistantId: string) => {
@@ -544,9 +576,9 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
     setTimeout(async () => {
       const turn = lastUserTurnRef.current;
       if (!turn) return;
-      await streamReply(turn.text, turn.mode, currentSessId, turn.image, assistantId);
+      await streamReply(turn.text, turn.mode, currentSessId, turn.image, assistantId, undefined, resolvedPersona);
     }, 0);
-  }, [isLoading, mode, currentSessId, streamReply]);
+  }, [isLoading, mode, currentSessId, streamReply, resolvedPersona]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -601,12 +633,49 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
               </button>
             ))}
           </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="role-select" className="text-[11px] text-blue-100 hidden sm:inline">Role</label>
+            <select
+              id="role-select"
+              value={persona}
+              onChange={e => setPersona(e.target.value as RoleOption)}
+              className="rounded-lg bg-white text-slate-800 text-xs px-2 py-1 focus:outline-none focus:ring-2 focus:ring-white/70"
+            >
+              {ROLE_OPTIONS.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+            {persona === 'Custom role...' && (
+              <input
+                type="text"
+                value={customPersona}
+                onChange={e => setCustomPersona(e.target.value)}
+                placeholder="Describe the role..."
+                className="rounded-lg bg-white text-slate-800 text-xs px-2 py-1 focus:outline-none focus:ring-2 focus:ring-white/70 w-40"
+              />
+            )}
+          </div>
           <button onClick={handleClear} title="Clear history" aria-label="Clear history"
             className="text-blue-100 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-all">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
               <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
             </svg>
           </button>
+        </div>
+      </div>
+
+      <div className="bg-slate-100 dark:bg-slate-700/60 border-b border-slate-200 dark:border-slate-600 px-4 py-3 text-sm text-slate-700 dark:text-slate-200">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-500 text-white text-xs font-semibold">🎭</span>
+            <div>
+              <p className="font-semibold">Active role: {resolvedPersona}</p>
+              <p className="text-[11px] text-slate-600 dark:text-slate-300">I will answer with this persona until you change it.</p>
+            </div>
+          </div>
+          <div className="text-[11px] text-slate-500 dark:text-slate-300">
+            Tip: switch roles to change tone and behavior without changing your question.
+          </div>
         </div>
       </div>
 
@@ -707,7 +776,7 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Ask your AI Tutor… (${MODE_META[mode].icon} ${MODE_META[mode].label} mode)`}
+            placeholder={`Ask your ${resolvedPersona}… (${MODE_META[mode].icon} ${MODE_META[mode].label} mode)`}
             rows={1}
             disabled={isLoading}
             className="flex-1 resize-none rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all overflow-y-auto disabled:opacity-60"

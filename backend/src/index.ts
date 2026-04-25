@@ -10,6 +10,7 @@ import { SessionStore } from './sessions/sessionStore';
 import { TeacherAgent } from './agent/teacherAgent';
 import { createUploadRouter } from './routes/upload';
 import { getActiveProvider } from './runtimeConfig';
+import { getAvailableProviders } from './models/llmRouter';
 import { createUploadUrlRouter } from './routes/uploadUrl';
 import { createConfigRouter } from './routes/config';
 import { createChatRouter } from './routes/chat';
@@ -73,8 +74,9 @@ app.use('/api/tts',        createTtsRouter());
 app.get('/api/health', (_req, res) => {
   const kb = brain.getStatus();
   res.json({
-    status:   'ok',
-    provider: getActiveProvider(),
+    status:            'ok',
+    provider:          getActiveProvider(),
+    availableProviders: getAvailableProviders(),
     // Expose only aggregate counts — not source filenames or sourceIds
     knowledgeBase: {
       totalChunks: kb.totalChunks,

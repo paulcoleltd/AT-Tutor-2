@@ -53,11 +53,11 @@ export async function deleteDocument(sourceId: string): Promise<void> {
   await handle(await fetch(`${BASE_URL}/upload/${sourceId}`, { method: 'DELETE' }));
 }
 
-export async function sendMessage(message: string, mode: TeachMode, sessionId: string): Promise<ChatResult> {
+export async function sendMessage(message: string, mode: TeachMode, sessionId: string, persona?: string): Promise<ChatResult> {
   return handle<ChatResult>(await fetch(`${BASE_URL}/chat`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ message, mode, sessionId }),
+    body:    JSON.stringify({ message, mode, sessionId, persona }),
   }));
 }
 
@@ -68,8 +68,9 @@ export async function* streamMessage(
   signal?: AbortSignal,
   image?: ImageAttachment,
   focusSourceId?: string,
+  persona?: string,
 ): AsyncGenerator<StreamEvent> {
-  const body: Record<string, unknown> = { message, mode, sessionId, stream: true };
+  const body: Record<string, unknown> = { message, mode, sessionId, stream: true, persona };
   if (image)         { body.imageBase64 = image.base64; body.imageMimeType = image.mimeType; }
   if (focusSourceId) { body.focusSourceId = focusSourceId; }
   const res = await fetch(`${BASE_URL}/chat`, {
@@ -138,7 +139,10 @@ export async function speakWithAI(text: string, voice: TtsVoice = 'nova'): Promi
 }
 
 export async function getHealth(): Promise<{
-  status: string; provider: string; sessions: number;
+  status: string;
+  provider: string;
+  availableProviders?: LLMProvider[];
+  sessions: number;
   knowledgeBase: { totalChunks: number; sources: { sourceId: string; filename: string; chunks: number; type: string }[] };
 }> {
   return handle(await fetch(`${BASE_URL}/health`));
