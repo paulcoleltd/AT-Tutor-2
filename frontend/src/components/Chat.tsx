@@ -50,9 +50,12 @@ const MODE_META: Record<TeachMode, { label: string; icon: string; tip: string }>
 };
 
 const AGENT_COMMANDS: { pattern: RegExp; provider: LLMProvider; name: string }[] = [
-  { pattern: /hey\s+agent\s*1|switch\s+to\s+claude|use\s+claude/i,  provider: 'claude', name: 'Claude (Agent 1)'  },
-  { pattern: /hey\s+agent\s*2|switch\s+to\s+gemini|use\s+gemini/i,  provider: 'gemini', name: 'Gemini (Agent 2)'  },
-  { pattern: /hey\s+agent\s*3|switch\s+to\s+openai|use\s+openai/i,  provider: 'openai', name: 'OpenAI (Agent 3)'  },
+  // Match: "hey agent 1", "agent 1", "switch to claude", "use claude", "agent one"
+  { pattern: /(?:hey\s+)?agent\s*(?:1|one)\b|switch\s+to\s+claude|use\s+claude/i,  provider: 'claude', name: 'Claude (Agent 1)'  },
+  // Match: "hey agent 2", "agent 2", "switch to gemini", "use gemini", "agent two"
+  { pattern: /(?:hey\s+)?agent\s*(?:2|two)\b|switch\s+to\s+gemini|use\s+gemini/i,  provider: 'gemini', name: 'Gemini (Agent 2)'  },
+  // Match: "hey agent 3", "agent 3", "switch to openai", "use openai", "agent three"
+  { pattern: /(?:hey\s+)?agent\s*(?:3|three)\b|switch\s+to\s+openai|use\s+openai/i,  provider: 'openai', name: 'OpenAI (Agent 3)'  },
 ];
 
 // Maximum messages kept in state — oldest are trimmed when exceeded
@@ -303,7 +306,8 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
   const [input,         setInput]         = useState('');
   const [mode,          setMode]          = useState<TeachMode>('explain');
   const [isLoading,     setIsLoading]     = useState(false);
-  const [speakEnabled,  setSpeakEnabled]  = useState(false);
+  const [speakEnabled,  setSpeakEnabled]  = useState(true); // auto-read every response by default
+  const [lastAnswer,    setLastAnswer]    = useState<string>('');
   const [error,         setError]         = useState<string | null>(null);
   const [currentSessId, setCurrentSessId] = useState(sessionId);
   const [pendingImage,   setPendingImage]   = useState<ImageAttachment | null>(null);
@@ -398,6 +402,7 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
           setMessages(prev => prev.map(m =>
             m.id === placeholder.id ? { ...m, streaming: false, sources } : m
           ));
+          setLastAnswer(fullContent);
           speakText(fullContent);
           if (liveRegionRef.current) {
             liveRegionRef.current.textContent = `AI Tutor responded: ${fullContent.slice(0, 100)}`;
@@ -416,6 +421,31 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
       abortRef.current = null;
     }
   }, [speakText, focusSourceId]);
+
+  // ── Voice transcript handler ────────────────────────────────────────────────
+  // Intercepts dictated text before it reaches the input box.
+  // If the user says an agent-switch phrase (e.g. "Hey Agent 1"), switch
+  // providers immediately — no need to press Send.  Otherwise, fill the input.
+  const handleTranscript = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    const cmd = AGENT_COMMANDS.find(c => c.pattern.test(trimmed));
+    if (cmd) {
+      try {
+        await setProvider(cmd.provider);
+        onProviderSwitch?.(cmd.provider);
+        const reply = `✅ Switched to **${cmd.name}**. How can I help you?`;
+        setMessages(prev => cappedMessages(
+          prev,
+          { id: makeId(), role: 'user',     content: trimmed, timestamp: new Date() },
+          { id: makeId(), role: 'assistant', content: reply,   timestamp: new Date() },
+        ));
+        // Speak the confirmation back to the user
+        speakText(reply.replace(/[#*`_~[\]>]/g, ''));
+      } catch (e: any) { setError(e.message); }
+      return; // do NOT put agent-switch phrase into the input box
+    }
+    setInput(text); // normal dictation → fill input, user can edit then press Send
+  }, [onProviderSwitch, speakText]);
 
   const handleSend = useCallback(async () => {
     const trimmed = input.trim();
@@ -700,9 +730,10 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, activeProvide
         </div>
 
         <VoiceControls
-          onTranscript={text => setInput(text)}
+          onTranscript={handleTranscript}
           speakEnabled={speakEnabled}
           onToggleSpeak={() => setSpeakEnabled(v => !v)}
+          lastAnswer={lastAnswer}
           disabled={isLoading}
         />
       </div>
