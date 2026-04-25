@@ -119,7 +119,7 @@ export function createUploadRouter(store: VectorStore): Router {
       } else if (AUDIO_EXTENSIONS.has(ext)) {
         autoSelectProviderForMedia('audio');
         const oai = getOpenAI();
-        const blob = new Blob([file.buffer], { type: file.mimetype || 'audio/mpeg' });
+        const blob = new Blob([new Uint8Array(file.buffer)], { type: file.mimetype || 'audio/mpeg' });
         const transcription = await oai.audio.transcriptions.create({
           file: new File([blob], filename, { type: file.mimetype || 'audio/mpeg' }),
           model: 'whisper-1',
@@ -133,7 +133,7 @@ export function createUploadRouter(store: VectorStore): Router {
         autoSelectProviderForMedia('video');
         try {
           const oai = getOpenAI();
-          const blob = new Blob([file.buffer], { type: 'video/mp4' });
+          const blob = new Blob([new Uint8Array(file.buffer)], { type: 'video/mp4' });
           const transcription = await oai.audio.transcriptions.create({
             file: new File([blob], filename.replace(/\.[^.]+$/, '.mp4'), { type: 'video/mp4' }),
             model: 'whisper-1',
