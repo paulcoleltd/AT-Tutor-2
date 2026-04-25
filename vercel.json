@@ -1,29 +1,16 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/index.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 30,
+      "includeFiles": "backend/src/**"
     }
-  ],
-  "routes": [
+  },
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/index.ts"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/frontend/dist/$1"
+      "source": "/api/:path*",
+      "destination": "/api/index.ts"
     }
   ]
 }

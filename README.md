@@ -149,18 +149,24 @@ Modes: `explain` · `quiz` · `chat` · `summarize` · `flashcard`
 > Keep `SECURITY.md` updated whenever security-related fixes, validation changes, or deployment hardening are added.
 > Use Dependabot and CI to catch vulnerable dependency upgrades automatically.
 
-## Deployment
+## Deployment (full-stack on Vercel)
 
-### Backend → Railway
-```bash
-cd backend
-npm run build
-# Push to Railway — it reads PORT from env automatically
-```
+The project deploys as a single Vercel project: the Express backend becomes a serverless function at `/api/*` and the Vite frontend is served as a static site.
 
-### Frontend → Vercel
-```bash
-cd frontend
-# Set VITE_API_URL=https://your-backend.up.railway.app in Vercel env vars
-npm run build
-```
+### Steps
+
+1. Push the repo to GitHub.
+2. In the [Vercel dashboard](https://vercel.com/new), import the repo — leave the framework preset as **Other**.
+3. Add these environment variables in Vercel → Settings → Environment Variables:
+
+| Variable | Required | Notes |
+|---|---|---|
+| `OPENAI_API_KEY` | ✅ Always | Powers embeddings (`text-embedding-3-small`) |
+| `LLM_PROVIDER` | ✅ | `claude` · `openai` · `gemini` |
+| `CLAUDE_API_KEY` | If `LLM_PROVIDER=claude` | Anthropic key |
+| `GEMINI_API_KEY` | If `LLM_PROVIDER=gemini` | Google AI key |
+| `ALLOWED_ORIGIN` | ✅ | Set to `https://your-app.vercel.app` |
+
+4. Deploy — the `vercel.json` handles build + routing automatically.
+
+> ⚠️ **In-memory knowledge base**: The vector store lives in RAM inside the serverless function. It resets on every cold start. For persistent storage across sessions, integrate an external vector store (Pinecone, Supabase pgvector, Upstash).
