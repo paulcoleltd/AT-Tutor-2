@@ -79,7 +79,13 @@ export function createChatRouter(agent: TeacherAgent): Router {
 
   // Reset a specific session
   router.delete('/history/:sessionId', (req: Request, res: Response): void => {
-    agent.resetSession(req.params.sessionId ?? ANONYMOUS_SESSION);
+    const { sessionId } = req.params;
+    const VALID_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!sessionId || (sessionId !== ANONYMOUS_SESSION && !VALID_UUID.test(sessionId))) {
+      res.status(400).json({ error: 'Invalid sessionId.' });
+      return;
+    }
+    agent.resetSession(sessionId);
     res.status(200).json({ success: true });
   });
 

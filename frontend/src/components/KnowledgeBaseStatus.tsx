@@ -16,6 +16,7 @@ export const KnowledgeBaseStatus: React.FC<Props> = ({ refreshKey }) => {
   const [error,         setError]         = useState(false);
   const [errorDismissed, setErrorDismissed] = useState(false);
   const [deleting,      setDeleting]      = useState<string | null>(null);
+  const [deleteError,   setDeleteError]   = useState<string | null>(null);
 
   const fetchHealth = useCallback(async () => {
     try { setHealth(await getHealth()); setError(false); setErrorDismissed(false); }
@@ -27,8 +28,9 @@ export const KnowledgeBaseStatus: React.FC<Props> = ({ refreshKey }) => {
 
   const handleDelete = async (sourceId: string) => {
     setDeleting(sourceId);
+    setDeleteError(null);
     try { await deleteDocument(sourceId); await fetchHealth(); }
-    catch (e: any) { alert(e.message); }
+    catch (e: any) { setDeleteError(e.message); }
     finally { setDeleting(null); }
   };
 
@@ -98,6 +100,13 @@ export const KnowledgeBaseStatus: React.FC<Props> = ({ refreshKey }) => {
         </ul>
       ) : (
         <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-1">No documents yet.</p>
+      )}
+
+      {deleteError && (
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-2 py-1.5">
+          <span>{deleteError}</span>
+          <button onClick={() => setDeleteError(null)} className="text-red-400 hover:text-red-600 font-bold flex-shrink-0">✕</button>
+        </div>
       )}
 
       <div className="mt-2 space-y-1 text-xs text-slate-400">

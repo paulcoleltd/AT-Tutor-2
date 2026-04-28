@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { uploadFile, uploadUrl } from '../lib/api';
 
 interface UploadedFile {
+  id:        string;
   name:      string;
   status:    'uploading' | 'success' | 'error';
   message?:  string;
@@ -22,20 +23,17 @@ export const FileUpload: React.FC<Props> = ({ onUploaded }) => {
   const handleFiles = async (fileList: FileList | null) => {
     if (!fileList?.length) return;
     for (const file of Array.from(fileList)) {
-      setFiles(prev => [...prev, { name: file.name, status: 'uploading' }]);
+      const id = crypto.randomUUID();
+      setFiles(prev => [...prev, { id, name: file.name, status: 'uploading' }]);
       try {
         const result = await uploadFile(file);
         setFiles(prev => prev.map(f =>
-          f.name === file.name && f.status === 'uploading'
-            ? { ...f, status: 'success', message: result.message, provider: result.provider, type: result.type }
-            : f
+          f.id === id ? { ...f, status: 'success', message: result.message, provider: result.provider, type: result.type } : f
         ));
         onUploaded?.();
       } catch (err: any) {
         setFiles(prev => prev.map(f =>
-          f.name === file.name && f.status === 'uploading'
-            ? { ...f, status: 'error', message: err.message }
-            : f
+          f.id === id ? { ...f, status: 'error', message: err.message } : f
         ));
       }
     }
@@ -48,20 +46,19 @@ export const FileUpload: React.FC<Props> = ({ onUploaded }) => {
     const url = urlInput.trim();
     if (!url || urlLoading) return;
     setUrlLoading(true);
+    const id = crypto.randomUUID();
     const label = url.length > 40 ? url.slice(0, 40) + '…' : url;
-    setFiles(prev => [...prev, { name: label, status: 'uploading' }]);
+    setFiles(prev => [...prev, { id, name: label, status: 'uploading' }]);
     try {
       const result = await uploadUrl(url);
       setFiles(prev => prev.map(f =>
-        f.name === label && f.status === 'uploading'
-          ? { ...f, status: 'success', message: result.message } : f
+        f.id === id ? { ...f, status: 'success', message: result.message } : f
       ));
       setUrlInput('');
       onUploaded?.();
     } catch (err: any) {
       setFiles(prev => prev.map(f =>
-        f.name === label && f.status === 'uploading'
-          ? { ...f, status: 'error', message: err.message } : f
+        f.id === id ? { ...f, status: 'error', message: err.message } : f
       ));
     } finally {
       setUrlLoading(false);
@@ -137,8 +134,8 @@ export const FileUpload: React.FC<Props> = ({ onUploaded }) => {
 
       {files.length > 0 && (
         <ul className="mt-4 space-y-2">
-          {files.map((f, i) => (
-            <li key={i} className={`flex items-start gap-2 text-sm rounded-lg px-3 py-2 ${
+          {files.map((f) => (
+            <li key={f.id} className={`flex items-start gap-2 text-sm rounded-lg px-3 py-2 ${
               f.status === 'error'
                 ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
                 : 'bg-slate-50 dark:bg-slate-700/50'
@@ -167,7 +164,7 @@ export const FileUpload: React.FC<Props> = ({ onUploaded }) => {
               {/* Delete / dismiss button — always visible, especially prominent on errors */}
               {f.status !== 'uploading' && (
                 <button
-                  onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))}
+                  onClick={() => setFiles(prev => prev.filter(x => x.id !== f.id))}
                   title="Remove from list"
                   aria-label="Remove from list"
                   className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors mt-0.5 ${

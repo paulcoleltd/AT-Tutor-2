@@ -56,6 +56,7 @@ export function createApp() {
 
   app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
   app.use(express.json({ limit: '1mb' }));
+  app.use(makeLimit(CONFIG.rateLimitMax));
 
   const store = new VectorStore();
   const brain = new Brain(store);
@@ -63,8 +64,8 @@ export function createApp() {
   const agent = new TeacherAgent(brain, sessions);
 
   app.use('/api/config', createConfigRouter());
-  app.use('/api/upload', createUploadRouter(store));
   app.use('/api/upload/url', createUploadUrlRouter(store));
+  app.use('/api/upload', createUploadRouter(store));
   app.use('/api/chat', createChatRouter(agent));
   app.use('/api/tts', createTtsRouter());
 
@@ -84,6 +85,11 @@ export function createApp() {
   });
 
   app.use('/api/*', (_req, res) => res.status(404).json({ error: 'API route not found.' }));
+
+  app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error('[app] Unhandled error:', err);
+    res.status(500).json({ error: 'An unexpected error occurred.' });
+  });
 
   return { app, store, brain, agent };
 }

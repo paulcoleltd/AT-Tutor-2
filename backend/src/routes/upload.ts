@@ -46,6 +46,13 @@ const ALL_EXTENSIONS = new Set([
   ...TEXT_EXTENSIONS, ...IMAGE_EXTENSIONS, ...AUDIO_EXTENSIONS, ...VIDEO_EXTENSIONS,
 ]);
 
+const DANGEROUS_MIMES = new Set([
+  'text/javascript', 'application/javascript', 'application/x-javascript',
+  'application/x-executable', 'application/x-msdownload', 'application/x-sh',
+  'application/x-shellscript', 'text/x-shellscript', 'application/x-php',
+  'application/x-python', 'application/x-ruby', 'text/x-python',
+]);
+
 function getOpenAI() {
   if (!CONFIG.openaiApiKey) throw new Error('OPENAI_API_KEY not set — required for audio/video transcription.');
   return new OpenAI({ apiKey: CONFIG.openaiApiKey });
@@ -59,6 +66,10 @@ export function createUploadRouter(store: VectorStore): Router {
     limits:  { fileSize: (CONFIG.maxFileSizeMb || 50) * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
       const ext = '.' + (file.originalname.split('.').pop()?.toLowerCase() ?? '');
+      if (DANGEROUS_MIMES.has(file.mimetype)) {
+        cb(new Error(`File type not allowed.`));
+        return;
+      }
       if (ALL_EXTENSIONS.has(ext)) return cb(null, true);
       cb(new Error(`Unsupported file type: ${file.originalname}. Supported: PDF, DOCX, MD, TXT, images (JPG/PNG/GIF/WEBP), audio (MP3/WAV/M4A/OGG), video (MP4/MOV/AVI/MKV).`));
     },
@@ -178,7 +189,8 @@ export function createUploadRouter(store: VectorStore): Router {
   // DELETE /api/upload/:sourceId
   router.delete('/:sourceId', (req: Request, res: Response): void => {
     const { sourceId } = req.params;
-    if (!sourceId) { res.status(400).json({ error: 'sourceId is required.' }); return; }
+    const VALID_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!sourceId || !VALID_UUID.test(sourceId)) { res.status(400).json({ error: 'Invalid sourceId.' }); return; }
     const removed = store.removeBySource(sourceId);
     if (removed === 0) { res.status(404).json({ error: 'Document not found in knowledge base.' }); return; }
     res.status(200).json({ success: true, message: `Removed ${removed} chunks for source ${sourceId}.`, chunksRemoved: removed });

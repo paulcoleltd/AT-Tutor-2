@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { speakWithAI } from '../lib/api';
+import { speakWithAI, fetchTtsBlob } from '../lib/api';
 
 interface Props {
   onTranscript:  (text: string) => void;
@@ -83,21 +83,14 @@ export const VoiceControls: React.FC<Props> = ({
     setIsReading(true);
     try {
       // Try AI TTS (OpenAI) first — rich, natural voice
-      const res = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text.replace(/[#*`_~[\]>]/g, '').slice(0, 4000) }),
-      });
-      if (res.ok) {
-        const blob = await res.blob();
-        const url  = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        currentAudioRef.current = audio;
-        audio.onended = () => { URL.revokeObjectURL(url); setIsReading(false); currentAudioRef.current = null; };
-        audio.onerror = () => { setIsReading(false); currentAudioRef.current = null; };
-        await audio.play();
-        return;
-      }
+      const blob = await fetchTtsBlob(text.replace(/[#*`_~[\]>]/g, '').slice(0, 4000));
+      const url  = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      currentAudioRef.current = audio;
+      audio.onended = () => { URL.revokeObjectURL(url); setIsReading(false); currentAudioRef.current = null; };
+      audio.onerror = () => { setIsReading(false); currentAudioRef.current = null; };
+      await audio.play();
+      return;
     } catch {}
     // Fallback — browser built-in speech synthesis (works offline, no API key needed)
     if (window.speechSynthesis) {

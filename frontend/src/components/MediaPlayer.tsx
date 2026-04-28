@@ -232,12 +232,6 @@ export const MediaPlayer: React.FC<Props> = ({ onMediaLoaded, externalUrl, onExt
                 />
               )}
 
-              {mediaType === 'unknown' && !activeUrl && (
-                <div className="bg-slate-100 dark:bg-slate-700 rounded-xl p-3 text-xs text-slate-500 dark:text-slate-400 text-center">
-                  ⚠️ Could not detect media type. Try a direct .mp4 or YouTube link.
-                </div>
-              )}
-
               {/* Playback speed (native video/audio only) */}
               {(mediaType === 'video' || mediaType === 'audio') && (
                 <div className="flex items-center gap-2">

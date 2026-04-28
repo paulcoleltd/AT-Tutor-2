@@ -80,6 +80,7 @@ export function createUploadUrlRouter(store: VectorStore): Router {
       upstream = await fetch(url, {
         headers: { 'User-Agent': 'AI-Tutor-Agent/2.0 (document ingestion)' },
         signal: AbortSignal.timeout(15_000),
+        redirect: 'error',
       });
     } catch (err: any) {
       res.status(502).json({ error: `Failed to fetch URL: ${err.message}` });

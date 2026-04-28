@@ -140,6 +140,16 @@ export async function speakWithAI(text: string, voice: TtsVoice = 'nova'): Promi
   await audio.play();
 }
 
+export async function fetchTtsBlob(text: string, voice: TtsVoice = 'nova'): Promise<Blob> {
+  const res = await fetch(`${BASE_URL}/tts`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ text, voice }),
+  });
+  if (!res.ok) throw new Error(`TTS error: HTTP ${res.status}`);
+  return res.blob();
+}
+
 export async function getHealth(): Promise<{
   status: string;
   provider: string;

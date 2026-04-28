@@ -12,9 +12,10 @@ interface Props {
 }
 
 export const ProviderSwitcher: React.FC<Props> = ({ onSwitch }) => {
-  const [active,    setActive]    = useState<LLMProvider>('claude');
-  const [available, setAvailable] = useState<LLMProvider[]>(['claude']);
-  const [switching, setSwitching] = useState(false);
+  const [active,       setActive]       = useState<LLMProvider>('claude');
+  const [available,    setAvailable]    = useState<LLMProvider[]>(['claude']);
+  const [switching,    setSwitching]    = useState(false);
+  const [switchError,  setSwitchError]  = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try { const d = await getProvider(); setActive(d.active); setAvailable(d.available); }
@@ -31,12 +32,13 @@ export const ProviderSwitcher: React.FC<Props> = ({ onSwitch }) => {
   const handleSwitch = async (provider: LLMProvider) => {
     if (provider === active || switching) return;
     setSwitching(true);
+    setSwitchError(null);
     try {
       const res = await setProvider(provider);
       setActive(res.active);
       onSwitch?.(res.active);
     } catch (e: any) {
-      alert(e.message);
+      setSwitchError(e.message);
     } finally {
       setSwitching(false);
     }
@@ -75,6 +77,13 @@ export const ProviderSwitcher: React.FC<Props> = ({ onSwitch }) => {
           );
         })}
       </div>
+      {switchError && (
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-2 py-1.5">
+          <span>{switchError}</span>
+          <button onClick={() => setSwitchError(null)} className="text-red-400 hover:text-red-600 font-bold flex-shrink-0">✕</button>
+        </div>
+      )}
+
       <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
         Say <strong>"Hey Agent 1"</strong>, <strong>"Agent 2"</strong>, or <strong>"Agent 3"</strong> to switch by voice.
         {available.length > 1 && ' Auto-fallback across providers is enabled for more robust responses.'}
