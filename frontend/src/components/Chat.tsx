@@ -42,12 +42,8 @@ export interface Message {
 
 function makeId() { return `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 
-const WELCOME: Message = {
-  id:        makeId(),
-  role:      'assistant',
-  content:   "Hi! 👋 I'm your **AI Tutor**. Upload a document on the left, then ask me anything about it.\n\nI can **explain** concepts, give you a **quiz**, generate a **summary**, create **flashcards**, or just **chat**!\n\nChoose a role above like **Receptionist** or **Brainy Expert** and I will adopt that persona in my answers. You can also attach an 🖼️ image to your message for visual analysis.",
-  timestamp: new Date(),
-};
+// Kept for the clear-history reset fallback (resolved at call time, not module load)
+const defaultWelcome = () => makeWelcome('AI Tutor');
 
 const MODE_META: Record<TeachMode, { label: string; icon: string; tip: string }> = {
   explain:   { label: 'Explain',    icon: '💡', tip: 'Detailed explanations with examples' },
@@ -67,6 +63,34 @@ const ROLE_OPTIONS = [
 ] as const;
 
 type RoleOption = (typeof ROLE_OPTIONS)[number];
+
+// Best LLM per role — Claude excels at creative/instructional, OpenAI at analytical, Gemini at broad knowledge
+const ROLE_PROVIDER_MAP: Partial<Record<RoleOption, LLMProvider>> = {
+  'AI Tutor':                'claude',
+  'Receptionist':            'claude',
+  'Brainy Expert':           'openai',
+  'General Knowledge Agent': 'gemini',
+  'Creative Assistant':      'claude',
+};
+
+const ROLE_WELCOME: Partial<Record<string, string>> = {
+  'AI Tutor':
+    "Hi! 👋 I'm your **AI Tutor**. Upload a document on the left, then ask me anything about it.\n\nI can **explain** concepts, give you a **quiz**, generate a **summary**, create **flashcards**, or just **chat**!\n\nChoose a role above like **Receptionist** or **Brainy Expert** and I will adopt that persona in my answers. You can also attach an 🖼️ image to your message for visual analysis.",
+  'Receptionist':
+    "Hello! 👋 I'm your **Receptionist**. I'm here to help you navigate information, answer your queries, and point you in the right direction — clearly and efficiently.\n\nUpload a document on the left and I'll use it to give you accurate, friendly answers. How can I assist you today?",
+  'Brainy Expert':
+    "Hello! 🧠 I'm your **Brainy Expert**. I specialise in deep, precise analysis — bring me your toughest questions and I'll break them down with rigour and clarity.\n\nUpload a document to ground my answers in your specific content. Ready when you are.",
+  'General Knowledge Agent':
+    "Hi! 🌐 I'm your **General Knowledge Agent**. Ask me about history, science, culture, technology, current events — anything you're curious about.\n\nUpload a document and I'll combine it with my broad knowledge to give you the most complete, well-rounded answer.",
+  'Creative Assistant':
+    "Hey! ✨ I'm your **Creative Assistant**! I'm here to help you write, brainstorm, imagine, and create.\n\nWhether it's storytelling, copywriting, ideation, or creative problem-solving — let's make something amazing together. Upload a document for creative inspiration!",
+};
+
+function makeWelcome(displayName: string): Message {
+  const content = ROLE_WELCOME[displayName]
+    ?? `Hi! 👋 I'm your **${displayName}**. How can I help you today?\n\nUpload a document on the left to ground my answers in your specific content.`;
+  return { id: makeId(), role: 'assistant', content, timestamp: new Date() };
+}
 
 const AGENT_COMMANDS: { pattern: RegExp; provider: LLMProvider; name: string }[] = [
   // Match: "hey agent 1", "agent 1", "switch to claude", "use claude", "agent one"
@@ -313,7 +337,7 @@ interface Props {
 }
 
 export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwitch, onNavigateMedia, onKbRefresh }) => {
-  const [messages,      setMessages]      = useState<Message[]>([WELCOME]);
+  const [messages,      setMessages]      = useState<Message[]>(() => [defaultWelcome()]);
   const [input,         setInput]         = useState('');
   const [mode,          setMode]          = useState<TeachMode>('explain');
   const [persona,       setPersona]       = useState<RoleOption>('AI Tutor');
@@ -327,6 +351,8 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwi
   const [pendingImage,   setPendingImage]   = useState<ImageAttachment | null>(null);
   const [focusSourceId,  setFocusSourceId]  = useState<string | undefined>(undefined);
   const [focusSourceUrl, setFocusSourceUrl] = useState<string | undefined>(undefined);
+
+  const prevPersonaRef = useRef<RoleOption | null>(null);
 
   const bottomRef     = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -352,6 +378,30 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwi
     window.localStorage.setItem('ai-tutor-persona', persona);
     window.localStorage.setItem('ai-tutor-custom-persona', customPersona);
   }, [persona, customPersona]);
+
+  // When the role changes: update the welcome message (if no real conversation yet)
+  // and auto-switch to the LLM best suited for that role.
+  useEffect(() => {
+    if (!isRoleLoaded) return;
+    if (prevPersonaRef.current === persona) return;
+    prevPersonaRef.current = persona;
+
+    const displayName = persona === 'Custom role...' ? (customPersona.trim() || 'AI Tutor') : persona;
+
+    setMessages(prev => {
+      if (prev.length === 1 && prev[0].role === 'assistant') {
+        return [makeWelcome(displayName)];
+      }
+      return prev;
+    });
+
+    const preferredProvider = persona !== 'Custom role...' ? ROLE_PROVIDER_MAP[persona] : undefined;
+    if (preferredProvider) {
+      setProvider(preferredProvider)
+        .then(() => onProviderSwitch?.(preferredProvider))
+        .catch(() => {});
+    }
+  }, [persona, isRoleLoaded, customPersona, onProviderSwitch]);
 
   // Keep a ref to the last user message + mode so Regenerate can replay it
   const lastUserTurnRef = useRef<{ text: string; mode: TeachMode; image?: ImageAttachment } | null>(null);
@@ -385,7 +435,7 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwi
 
   // Export the conversation as a Markdown file download
   const handleExport = useCallback(() => {
-    const exportable = messages.filter(m => m.id !== WELCOME.id && !m.streaming);
+    const exportable = messages.filter(m => !m.streaming && m.content.trim() !== '');
     if (exportable.length === 0) return;
     const lines: string[] = [
       `# AI Tutor Chat Export`,
@@ -650,7 +700,7 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwi
     await clearHistory(currentSessId);
     const newId = onSessionReset();
     setCurrentSessId(newId);
-    setMessages([{ ...WELCOME, id: makeId() }]);
+    setMessages([makeWelcome(resolvedPersona)]);
     setError(null);
     setFocusSourceId(undefined);
     setFocusSourceUrl(undefined);
