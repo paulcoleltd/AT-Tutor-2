@@ -228,11 +228,6 @@ describe('KnowledgeBaseStatus', () => {
   beforeEach(() => {
     mockGetHealth.mockReset();
     mockDeleteDocument.mockReset();
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   it('renders null (nothing) while health is loading', () => {
@@ -281,7 +276,7 @@ describe('KnowledgeBaseStatus', () => {
     // After delete, re-fetch returns updated state
     mockDeleteDocument.mockResolvedValue(undefined);
 
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    const user = userEvent.setup();
     render(<KnowledgeBaseStatus />);
 
     await waitFor(() => {
@@ -306,7 +301,7 @@ describe('KnowledgeBaseStatus', () => {
 
   it('dismisses the error banner when the X button is clicked', async () => {
     mockGetHealth.mockRejectedValue(new Error('network error'));
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    const user = userEvent.setup();
     render(<KnowledgeBaseStatus />);
 
     await waitFor(() => {
@@ -326,11 +321,6 @@ describe('ProviderSwitcher', () => {
   beforeEach(() => {
     mockGetProvider.mockReset();
     mockSetProvider.mockReset();
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   const defaultProviderState = {
@@ -373,7 +363,7 @@ describe('ProviderSwitcher', () => {
     mockSetProvider.mockResolvedValue({ success: true, active: 'gemini' as const });
 
     const onSwitch = vi.fn();
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    const user = userEvent.setup();
     render(<ProviderSwitcher onSwitch={onSwitch} />);
 
     await waitFor(() => {
@@ -390,7 +380,7 @@ describe('ProviderSwitcher', () => {
 
   it('does NOT call setProvider when clicking the already-active provider', async () => {
     mockGetProvider.mockResolvedValue(defaultProviderState);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    const user = userEvent.setup();
     render(<ProviderSwitcher />);
 
     await waitFor(() => {
@@ -405,7 +395,7 @@ describe('ProviderSwitcher', () => {
     mockGetProvider.mockResolvedValue(defaultProviderState);
     mockSetProvider.mockRejectedValue(new Error('Provider switch failed'));
 
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    const user = userEvent.setup();
     render(<ProviderSwitcher />);
 
     await waitFor(() => {

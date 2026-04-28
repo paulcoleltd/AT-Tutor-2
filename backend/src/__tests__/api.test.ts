@@ -5,21 +5,23 @@
  * API keys and without network access.  The express app is created fresh for
  * every test suite via the exported `createApp()` factory so each describe
  * block gets an isolated instance.
+ *
+ * IMPORTANT: env vars must be set at module scope — before any app modules are
+ * loaded — because CONFIG in config.ts is evaluated at import time.  Jest
+ * hoists jest.mock() calls but NOT regular statements, so a beforeAll() block
+ * runs too late for process.env changes to reach CONFIG.
  */
 
-import request from 'supertest';
+// ─── Environment setup — MUST be first, before any app imports ────────────────
+process.env.OPENAI_API_KEY       = 'test-openai-key';
+process.env.CLAUDE_API_KEY       = 'test-claude-key';
+process.env.GEMINI_API_KEY       = 'test-gemini-key';
+process.env.LLM_PROVIDER         = 'openai';
+process.env.NODE_ENV             = 'test';
+process.env.RATE_LIMIT_WINDOW_MS = '1000';
+process.env.RATE_LIMIT_MAX       = '1000';
 
-// ─── Environment setup (must come before any app imports) ─────────────────────
-beforeAll(() => {
-  process.env.OPENAI_API_KEY  = 'test-openai-key';
-  process.env.CLAUDE_API_KEY  = 'test-claude-key';
-  process.env.GEMINI_API_KEY  = 'test-gemini-key';
-  process.env.LLM_PROVIDER    = 'openai';
-  process.env.NODE_ENV        = 'test';
-  // Speed up tests — minimal rate-limit window
-  process.env.RATE_LIMIT_WINDOW_MS = '1000';
-  process.env.RATE_LIMIT_MAX       = '1000';
-});
+import request from 'supertest';
 
 // ─── Mock: embeddings ─────────────────────────────────────────────────────────
 jest.mock('../models/embeddings', () => ({
@@ -55,7 +57,7 @@ jest.mock('pdf-parse', () =>
   jest.fn().mockResolvedValue({ text: 'Mock PDF text content for testing.' }),
 );
 
-// ─── Lazy app import (after env + mocks are registered) ───────────────────────
+// ─── App import (after env + mocks are set) ───────────────────────────────────
 import { createApp } from '../app';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -292,10 +294,7 @@ describe('DELETE /api/chat/history/:sessionId', () => {
     expect(res.body).toHaveProperty('error');
   });
 
-  it('returns 400 for an empty sessionId parameter', async () => {
-    // Express won't match /api/chat/history/ with a trailing slash as the
-    // parameterised route, so hitting the bare /history path exercises the
-    // legacy route which always succeeds — test the parameterised path only.
+  it('returns 400 for a special-character sessionId parameter', async () => {
     const res = await request(app)
       .delete('/api/chat/history/!!!');
     expect(res.status).toBe(400);
@@ -522,6 +521,13 @@ describe('POST /api/upload/url — URL validation and SSRF prevention', () => {
 
 // =============================================================================
 // 11. POST /api/tts — validation
+// NOTE: tts.ts checks for OPENAI_API_KEY before running Zod validation.
+//       Tests that expect a 400 from Zod will only work when the key IS set,
+//       which is guaranteed by the module-scope env assignment at the top of
+//       this file.  Tests that expect non-400 pass both the key check AND Zod,
+//       then fail upstream (503 if key absent, 502/5xx if key present but
+//       network unavailable in test env) — all acceptable for validating the
+//       validation layer.
 // =============================================================================
 describe('POST /api/tts — validation', () => {
   const app = buildApp();
