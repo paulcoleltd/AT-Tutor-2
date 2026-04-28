@@ -25,7 +25,7 @@ const RATE_LIMIT_SKIP = ['/api/health', '/api/config/provider'];
 function makeLimit(max: number, windowMs = CONFIG.rateLimitWindowMs) {
   return rateLimit({
     windowMs,
-    max,
+    limit: max,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests. Please slow down.' },
