@@ -13,3 +13,6 @@ coverage/
 .vercel
 .claude/
 .vs/
+e2e-report/
+test-results/
+playwright-report/
