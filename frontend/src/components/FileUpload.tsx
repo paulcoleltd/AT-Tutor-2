@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { uploadFile, uploadUrl } from '../lib/api';
+import { uploadFileWithProgress, uploadUrl } from '../lib/api';
 
 interface UploadedFile {
   id:        string;
@@ -8,6 +8,7 @@ interface UploadedFile {
   message?:  string;
   provider?: string;
   type?:     string;
+  progress?: number; // 0–100, set during XHR upload
 }
 
 interface Props { onUploaded?: () => void; }
@@ -24,16 +25,18 @@ export const FileUpload: React.FC<Props> = ({ onUploaded }) => {
     if (!fileList?.length) return;
     for (const file of Array.from(fileList)) {
       const id = crypto.randomUUID();
-      setFiles(prev => [...prev, { id, name: file.name, status: 'uploading' }]);
+      setFiles(prev => [...prev, { id, name: file.name, status: 'uploading', progress: 0 }]);
       try {
-        const result = await uploadFile(file);
+        const result = await uploadFileWithProgress(file, pct =>
+          setFiles(prev => prev.map(f => f.id === id ? { ...f, progress: pct } : f))
+        );
         setFiles(prev => prev.map(f =>
-          f.id === id ? { ...f, status: 'success', message: result.message, provider: result.provider, type: result.type } : f
+          f.id === id ? { ...f, status: 'success', message: result.message, provider: result.provider, type: result.type, progress: undefined } : f
         ));
         onUploaded?.();
       } catch (err: any) {
         setFiles(prev => prev.map(f =>
-          f.id === id ? { ...f, status: 'error', message: err.message } : f
+          f.id === id ? { ...f, status: 'error', message: err.message, progress: undefined } : f
         ));
       }
     }
@@ -154,11 +157,27 @@ export const FileUpload: React.FC<Props> = ({ onUploaded }) => {
                   </p>
                 )}
                 {f.status === 'uploading' && (
-                  <p className="text-xs mt-0.5 text-blue-500 animate-pulse">
-                    {f.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? '🖼️ Analysing with AI…' :
-                     f.name.match(/\.(mp3|wav|m4a|ogg|flac)$/i) ? '🎵 Transcribing audio…' :
-                     f.name.match(/\.(mp4|mov|avi|mkv)$/i) ? '🎬 Transcribing video…' : 'Processing…'}
-                  </p>
+                  <div className="mt-1 space-y-1">
+                    {/* Progress bar — shows % during XHR transfer; pulses during server-side processing */}
+                    <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                      {(f.progress ?? 0) < 100 ? (
+                        <div
+                          className="h-full bg-blue-500 rounded-full transition-all duration-200"
+                          style={{ width: `${f.progress ?? 0}%` }}
+                        />
+                      ) : (
+                        <div className="h-full bg-blue-400 rounded-full animate-pulse w-full" />
+                      )}
+                    </div>
+                    <p className="text-xs text-blue-500">
+                      {(f.progress ?? 0) < 100
+                        ? `Uploading… ${f.progress ?? 0}%`
+                        : f.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? '🖼️ Analysing with AI…'
+                        : f.name.match(/\.(mp3|wav|m4a|ogg|flac)$/i) ? '🎵 Transcribing audio…'
+                        : f.name.match(/\.(mp4|mov|avi|mkv)$/i)       ? '🎬 Transcribing video…'
+                        : 'Processing…'}
+                    </p>
+                  </div>
                 )}
               </div>
               {/* Delete / dismiss button — always visible, especially prominent on errors */}

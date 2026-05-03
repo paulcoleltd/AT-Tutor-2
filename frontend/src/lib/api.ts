@@ -41,6 +41,34 @@ export async function uploadFile(file: File): Promise<UploadResult> {
   return handle<UploadResult>(await fetch(`${BASE_URL}/upload`, { method: 'POST', body }));
 }
 
+/** Upload a file and report progress (0–100) via the onProgress callback. */
+export function uploadFileWithProgress(
+  file: File,
+  onProgress: (pct: number) => void,
+): Promise<UploadResult> {
+  return new Promise((resolve, reject) => {
+    const xhr  = new XMLHttpRequest();
+    const body = new FormData();
+    body.append('file', file);
+
+    xhr.upload.addEventListener('progress', e => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    });
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText) as UploadResult); }
+        catch { reject(new Error('Invalid response from server.')); }
+      } else {
+        try { reject(new Error((JSON.parse(xhr.responseText) as { error?: string }).error ?? `HTTP ${xhr.status}`)); }
+        catch { reject(new Error(`HTTP ${xhr.status}`)); }
+      }
+    });
+    xhr.addEventListener('error', () => reject(new Error('Network error during upload.')));
+    xhr.open('POST', `${BASE_URL}/upload`);
+    xhr.send(body);
+  });
+}
+
 export async function uploadUrl(url: string): Promise<UploadResult> {
   return handle<UploadResult>(await fetch(`${BASE_URL}/upload/url`, {
     method:  'POST',

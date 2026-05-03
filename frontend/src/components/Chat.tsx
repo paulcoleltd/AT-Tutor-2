@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import type { Components } from 'react-markdown';
 import { streamMessage, clearHistory, speakWithAI, setProvider, uploadUrl, TeachMode, LLMProvider, ImageAttachment } from '../lib/api';
 import { VoiceControls } from './VoiceControls';
 
@@ -103,11 +104,43 @@ const AGENT_COMMANDS: { pattern: RegExp; provider: LLMProvider; name: string }[]
 
 // Maximum messages kept in state — oldest are trimmed when exceeded
 const MAX_MESSAGES = 200;
+// Maximum messages persisted to localStorage (avoid quota issues)
+const MAX_STORED = 100;
 
 // Helper: append messages and trim oldest if over the cap
 function cappedMessages(prev: Message[], ...toAdd: Message[]): Message[] {
   const next = [...prev, ...toAdd];
   return next.length > MAX_MESSAGES ? next.slice(next.length - MAX_MESSAGES) : next;
+}
+
+// ── localStorage chat persistence ────────────────────────────────────────────
+
+function chatStorageKey(sessId: string) { return `ai-tutor-chat-${sessId}`; }
+
+/** Serialize messages to localStorage. Skips streaming messages and large images. */
+function persistChat(sessId: string, msgs: Message[]): void {
+  try {
+    const saveable = msgs
+      .filter(m => !m.streaming && m.content.trim())
+      .slice(-MAX_STORED)
+      .map(m => ({ ...m, timestamp: (m.timestamp as Date).toISOString(), image: undefined }));
+    // Only persist if there's a real conversation (not just the welcome message)
+    if (saveable.length > 1 || (saveable.length === 1 && saveable[0].role !== 'assistant')) {
+      localStorage.setItem(chatStorageKey(sessId), JSON.stringify(saveable));
+    }
+  } catch { /* quota exceeded or storage unavailable — degrade silently */ }
+}
+
+/** Restore messages from localStorage, converting ISO strings back to Dates. */
+function restoreChat(sessId: string): Message[] {
+  try {
+    const raw = localStorage.getItem(chatStorageKey(sessId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Array<Omit<Message, 'timestamp'> & { timestamp: string }>;
+    return parsed.map(m => ({ ...m, timestamp: new Date(m.timestamp) }));
+  } catch {
+    return [];
+  }
 }
 
 // ── Action toolbar shown below each assistant reply ───────────────────────────
@@ -241,6 +274,46 @@ interface BubbleProps {
   onRegenerate: (id: string) => void;
 }
 
+// ── Custom code-block renderer with copy button ───────────────────────────────
+const CopyableCode: Components['code'] = ({ className, children, node: _node, ...rest }) => {
+  const [copied, setCopied] = useState(false);
+  const isBlock = className?.startsWith('language-') || String(children).includes('\n');
+  const code = String(children).replace(/\n$/, '');
+
+  if (!isBlock) {
+    return (
+      <code className="bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-1 py-0.5 rounded text-[0.85em] font-mono" {...rest}>
+        {children}
+      </code>
+    );
+  }
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  return (
+    <div className="relative group/code my-2">
+      <pre className={`${className ?? ''} overflow-x-auto rounded-xl bg-slate-900 dark:bg-slate-950 text-slate-100 p-4 text-sm font-mono leading-relaxed`}>
+        <code>{children}</code>
+      </pre>
+      <button
+        onClick={handleCopy}
+        title={copied ? 'Copied!' : 'Copy code'}
+        className="absolute top-2 right-2 opacity-0 group-hover/code:opacity-100 transition-opacity bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-medium px-2 py-1 rounded-lg"
+      >
+        {copied ? '✓ Copied' : 'Copy'}
+      </button>
+    </div>
+  );
+};
+
+const MD_COMPONENTS: Components = { code: CopyableCode };
+
 const MessageBubble = memo(({ msg, isLastAssistant, isLoading, onDelete, onRegenerate }: BubbleProps) => (
   // content-visibility:auto lets the browser skip layout/paint for off-screen bubbles
   <div
@@ -274,7 +347,7 @@ const MessageBubble = memo(({ msg, isLastAssistant, isLoading, onDelete, onRegen
 
         {msg.role === 'assistant' ? (
           <div className="prose-chat">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{msg.content}</ReactMarkdown>
             {msg.streaming && <span className="cursor-blink ml-0.5 text-blue-400">▋</span>}
           </div>
         ) : msg.content}
@@ -337,7 +410,10 @@ interface Props {
 }
 
 export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwitch, onNavigateMedia, onKbRefresh }) => {
-  const [messages,      setMessages]      = useState<Message[]>(() => [defaultWelcome()]);
+  const [messages,      setMessages]      = useState<Message[]>(() => {
+    const restored = restoreChat(sessionId);
+    return restored.length > 0 ? restored : [defaultWelcome()];
+  });
   const [input,         setInput]         = useState('');
   const [mode,          setMode]          = useState<TeachMode>('explain');
   const [persona,       setPersona]       = useState<RoleOption>('AI Tutor');
@@ -427,6 +503,11 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwi
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isLoading]);
+
+  // Persist messages to localStorage after every update
+  useEffect(() => {
+    persistChat(currentSessId, messages);
+  }, [messages, currentSessId]);
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -698,6 +779,7 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwi
   const handleClear = async () => {
     abortRef.current?.abort();
     await clearHistory(currentSessId);
+    localStorage.removeItem(chatStorageKey(currentSessId));
     const newId = onSessionReset();
     setCurrentSessId(newId);
     setMessages([makeWelcome(resolvedPersona)]);

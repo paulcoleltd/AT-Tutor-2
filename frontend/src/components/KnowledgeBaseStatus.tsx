@@ -11,15 +11,33 @@ interface HealthResponse {
 
 interface Props { refreshKey?: number; }
 
+const KB_PREV_KEY = 'ai-tutor-kb-had-docs'; // persists whether user had docs last session
+
 export const KnowledgeBaseStatus: React.FC<Props> = ({ refreshKey }) => {
   const [health,        setHealth]        = useState<HealthResponse | null>(null);
   const [error,         setError]         = useState(false);
   const [errorDismissed, setErrorDismissed] = useState(false);
   const [deleting,      setDeleting]      = useState<string | null>(null);
   const [deleteError,   setDeleteError]   = useState<string | null>(null);
+  // Show cold-start warning when the KB is empty but the user previously had docs
+  const [showResetWarning, setShowResetWarning] = useState(false);
 
   const fetchHealth = useCallback(async () => {
-    try { setHealth(await getHealth()); setError(false); setErrorDismissed(false); }
+    try {
+      const data = await getHealth();
+      setHealth(data);
+      setError(false);
+      setErrorDismissed(false);
+      const hadDocs = localStorage.getItem(KB_PREV_KEY) === 'true';
+      const hasDocs = data.knowledgeBase.sources.length > 0;
+      if (hasDocs) {
+        localStorage.setItem(KB_PREV_KEY, 'true');
+        setShowResetWarning(false);
+      } else if (hadDocs) {
+        // KB is empty but user previously had documents → likely a cold-start reset
+        setShowResetWarning(true);
+      }
+    }
     catch { setError(true); }
   }, []);
 
@@ -79,6 +97,22 @@ export const KnowledgeBaseStatus: React.FC<Props> = ({ refreshKey }) => {
           </div>
         ))}
       </div>
+
+      {/* Cold-start warning — shown when server reset wiped the in-memory KB */}
+      {showResetWarning && sources.length === 0 && (
+        <div className="mb-3 flex items-start gap-2 text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2 text-amber-700 dark:text-amber-400">
+          <span className="flex-shrink-0 mt-0.5">⚠️</span>
+          <div className="flex-1">
+            <p className="font-semibold">Knowledge base was reset</p>
+            <p className="mt-0.5 text-amber-600 dark:text-amber-500">The server restarted and lost your documents. Please re-upload them.</p>
+          </div>
+          <button
+            onClick={() => { setShowResetWarning(false); localStorage.removeItem(KB_PREV_KEY); }}
+            title="Dismiss"
+            className="flex-shrink-0 w-4 h-4 rounded-full bg-amber-200 dark:bg-amber-800 hover:bg-amber-300 dark:hover:bg-amber-700 flex items-center justify-center text-[10px] font-bold transition-colors mt-0.5"
+          >✕</button>
+        </div>
+      )}
 
       {sources.length > 0 ? (
         <ul className="space-y-1.5">
