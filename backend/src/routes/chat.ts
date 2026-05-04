@@ -28,6 +28,41 @@ const ChatBodySchema = z.object({
 
 const ANONYMOUS_SESSION = 'anonymous';
 
+// ── Abuse-pattern detection ────────────────────────────────────────────────────
+// Flags messages that match known prompt-injection or abuse patterns.
+// Returns the detected pattern label or null if the message looks benign.
+const ABUSE_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  { label: 'prompt_injection',    pattern: /ignore\s+(previous|all|your)\s+instructions?|disregard\s+(the\s+)?above|system\s+prompt|you\s+are\s+now\s+(?:an?\s+)?(?:DAN|evil|unrestricted)/i },
+  { label: 'jailbreak',           pattern: /act\s+as\s+(?:if\s+you\s+(?:are|were)\s+|an?\s+)?(?:DAN|evil|unfiltered|uncensored|GPT-?4?)\b|developer\s+mode|jailbreak/i },
+  { label: 'credential_harvest',  pattern: /(?:api\s+key|secret|password|token)\s*(?:is|=|:)\s*[A-Za-z0-9+/]{16,}/i },
+  { label: 'exfiltration_attempt',pattern: /repeat\s+(the\s+)?(?:system\s+)?prompt|print\s+your\s+instructions|reveal\s+your\s+(?:system\s+)?prompt|what\s+(?:are|were)\s+your\s+instructions/i },
+  { label: 'high_volume_detect',  pattern: /.{3500,}/ }, // suspiciously long single message
+];
+
+function detectAbuse(message: string): string | null {
+  for (const { label, pattern } of ABUSE_PATTERNS) {
+    if (pattern.test(message)) return label;
+  }
+  return null;
+}
+
+// Per-session request rate tracker (in-memory, resets on restart)
+const _sessionRequests = new Map<string, { count: number; windowStart: number }>();
+const SESSION_RATE_LIMIT = 30;    // max messages per window
+const SESSION_WINDOW_MS  = 60_000; // 1-minute window
+
+function checkSessionRate(sessionId: string): boolean {
+  const now  = Date.now();
+  const rec  = _sessionRequests.get(sessionId) ?? { count: 0, windowStart: now };
+  if (now - rec.windowStart > SESSION_WINDOW_MS) {
+    rec.count = 1; rec.windowStart = now;
+  } else {
+    rec.count += 1;
+  }
+  _sessionRequests.set(sessionId, rec);
+  return rec.count <= SESSION_RATE_LIMIT;
+}
+
 export function createChatRouter(agent: TeacherAgent): Router {
   const router = Router();
 
@@ -41,6 +76,26 @@ export function createChatRouter(agent: TeacherAgent): Router {
     const { message, mode, persona, sessionId = ANONYMOUS_SESSION, stream, imageBase64, imageMimeType, focusSourceId, userContext } = parsed.data;
     const imageData = imageBase64 && imageMimeType ? { base64: imageBase64, mimeType: imageMimeType } : undefined;
     const assignedPersona = persona?.trim() || 'AI Tutor';
+
+    // ── Audit: session rate limiting & abuse detection ────────────────────────
+    if (!checkSessionRate(sessionId)) {
+      console.log(JSON.stringify({ ts: new Date().toISOString(), event: 'audit:rate_exceeded', sessionId }));
+      res.status(429).json({ error: 'Too many messages in this session. Please wait a moment.' });
+      return;
+    }
+
+    const abuseLabel = detectAbuse(message);
+    if (abuseLabel) {
+      console.log(JSON.stringify({
+        ts: new Date().toISOString(),
+        event: 'audit:abuse_detected',
+        label: abuseLabel,
+        sessionId,
+        messageLen: message.length,
+        preview: message.slice(0, 80),
+      }));
+      // Do NOT block — the hardened system prompt handles it. Just log.
+    }
 
     // ── Streaming path (SSE) ──────────────────────────────────────────────────
     if (stream) {
