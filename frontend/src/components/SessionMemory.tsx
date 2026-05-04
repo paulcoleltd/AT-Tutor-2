@@ -54,11 +54,13 @@ export const SessionMemory: React.FC<Props> = ({
             <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 leading-tight">
               Memory
             </p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 leading-tight mt-0.5">
-              {others.length === 0
-                ? 'No saved sessions yet'
-                : `${others.length} saved session${others.length !== 1 ? 's' : ''}`}
-            </p>
+            {!open && (
+              <p className="text-xs text-slate-400 dark:text-slate-500 leading-tight mt-0.5">
+                {others.length === 0
+                  ? 'No saved sessions yet'
+                  : `${others.length} saved session${others.length !== 1 ? 's' : ''}`}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">

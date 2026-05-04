@@ -20,7 +20,7 @@ interface Props {
 
 export const UserProfile: React.FC<Props> = ({ onProfileSaved }) => {
   const { profile, updateProfile, clearProfile, hasProfile } = useUserProfile();
-  const [open, setOpen]     = useState(!hasProfile); // open by default if empty
+  const [open, setOpen]     = useState(false); // always start collapsed
   const [saved, setSaved]   = useState(false);
   const [editing, setEditing] = useState(!hasProfile);
 

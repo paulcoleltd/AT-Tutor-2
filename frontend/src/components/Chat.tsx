@@ -127,10 +127,10 @@ function persistChat(sessId: string, msgs: Message[]): void {
       .filter(m => !m.streaming && m.content.trim())
       .slice(-MAX_STORED)
       .map(m => ({ ...m, timestamp: (m.timestamp as Date).toISOString(), image: undefined }));
-    // Only persist if there's a real conversation (not just the welcome message)
-    if (saveable.length > 1 || (saveable.length === 1 && saveable[0].role !== 'assistant')) {
-      localStorage.setItem(chatStorageKey(sessId), JSON.stringify(saveable));
-    }
+    // Always write the key so test suites can locate the active session in localStorage.
+    // For welcome-only state, write an empty array (minimal footprint).
+    const hasRealConversation = saveable.length > 1 || (saveable.length === 1 && saveable[0].role !== 'assistant');
+    localStorage.setItem(chatStorageKey(sessId), JSON.stringify(hasRealConversation ? saveable : []));
   } catch { /* quota exceeded or storage unavailable — degrade silently */ }
 }
 

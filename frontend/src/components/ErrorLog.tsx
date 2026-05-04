@@ -61,9 +61,11 @@ export const ErrorLog: React.FC<Props> = ({ entries, errorCount, onClear }) => {
             <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 leading-tight">
               Error Log
             </p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 leading-tight mt-0.5">
-              {entries.length === 0 ? 'No events captured' : `${entries.length} event${entries.length !== 1 ? 's' : ''}`}
-            </p>
+            {!open && (
+              <p className="text-xs text-slate-400 dark:text-slate-500 leading-tight mt-0.5">
+                {entries.length === 0 ? 'No events captured' : `${entries.length} event${entries.length !== 1 ? 's' : ''}`}
+              </p>
+            )}
           </div>
         </div>
 
