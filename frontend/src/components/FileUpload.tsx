@@ -11,9 +11,12 @@ interface UploadedFile {
   progress?: number; // 0–100, set during XHR upload
 }
 
-interface Props { onUploaded?: () => void; }
+interface Props {
+  onUploaded?: () => void;
+  onError?:    (message: string) => void;
+}
 
-export const FileUpload: React.FC<Props> = ({ onUploaded }) => {
+export const FileUpload: React.FC<Props> = ({ onUploaded, onError }) => {
   const [files, setFiles]         = useState<UploadedFile[]>([]);
   const [isDragging, setDragging] = useState(false);
   const [tab, setTab]             = useState<'file' | 'url'>('file');
@@ -35,9 +38,11 @@ export const FileUpload: React.FC<Props> = ({ onUploaded }) => {
         ));
         onUploaded?.();
       } catch (err: any) {
+        const msg = err?.message ?? 'Upload failed';
         setFiles(prev => prev.map(f =>
-          f.id === id ? { ...f, status: 'error', message: err.message, progress: undefined } : f
+          f.id === id ? { ...f, status: 'error', message: msg, progress: undefined } : f
         ));
+        onError?.(msg);
       }
     }
   };

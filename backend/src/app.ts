@@ -13,6 +13,7 @@ import { createUploadUrlRouter } from './routes/uploadUrl';
 import { createConfigRouter } from './routes/config';
 import { createChatRouter } from './routes/chat';
 import { createTtsRouter } from './routes/tts';
+import { createSearchRouter } from './routes/search';
 import { getAvailableProviders } from './models/llmRouter';
 import { getActiveProvider } from './runtimeConfig';
 
@@ -68,6 +69,7 @@ export function createApp() {
   app.use('/api/upload', createUploadRouter(store));
   app.use('/api/chat', createChatRouter(agent));
   app.use('/api/tts', createTtsRouter());
+  app.use('/api/search', createSearchRouter());
 
   app.get('/api/health', (_req, res) => {
     const kb = brain.getStatus();

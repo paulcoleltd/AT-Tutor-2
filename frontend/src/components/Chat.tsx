@@ -2,13 +2,16 @@ import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
-import { streamMessage, clearHistory, speakWithAI, setProvider, uploadUrl, TeachMode, LLMProvider, ImageAttachment } from '../lib/api';
+import { streamMessage, clearHistory, speakWithAI, setProvider, uploadUrl, webSearch, TeachMode, LLMProvider, ImageAttachment } from '../lib/api';
+import { profileToContext } from '../hooks/useUserProfile';
 import { VoiceControls } from './VoiceControls';
 
 // Detect "navigate to / go to / open / load / check / look at <URL>" patterns
-const NAV_PATTERN = /(?:navigate\s+to|go\s+to|open|load|check\s+out?|look\s+at|fetch|read|analyse|analyze|play|watch|listen\s+to)\s+(https?:\/\/[^\s]+)/i;
+const NAV_PATTERN    = /(?:navigate\s+to|go\s+to|open|load|check\s+out?|look\s+at|fetch|read|analyse|analyze|play|watch|listen\s+to)\s+(https?:\/\/[^\s]+)/i;
 // Also catch bare "what's on https://..." or a URL appearing mid-sentence
-const URL_IN_MSG  = /(https?:\/\/[^\s]+)/;
+const URL_IN_MSG     = /(https?:\/\/[^\s]+)/;
+// Detect web search intent: "search for X", "look up X online", "find info on X", etc.
+const SEARCH_PATTERN = /(?:search(?:\s+the\s+(?:web|internet|net))?\s+for|look\s+up\s+online|find\s+(?:info|information)\s+(?:on|about)|google|search\s+online\s+for|what(?:'s|\s+is)\s+the\s+latest(?:\s+on)?)\s+(.+)/i;
 
 function extractNavUrl(text: string): string | null {
   const m = text.match(NAV_PATTERN) ?? text.match(URL_IN_MSG);
@@ -401,15 +404,27 @@ MessageBubble.displayName = 'MessageBubble';
 
 // ── Main Chat component ───────────────────────────────────────────────────────
 interface Props {
-  sessionId: string;
+  sessionId:     string;
   onSessionReset: () => string;
   activeProvider?: LLMProvider;
   onProviderSwitch?: (p: LLMProvider) => void;
-  onNavigateMedia?: (url: string) => void; // tells App to open MediaPlayer with this URL
-  onKbRefresh?: () => void;               // tells App to refresh KB status panel
+  onNavigateMedia?: (url: string) => void;
+  onKbRefresh?: () => void;
+  // Memory & profile
+  userProfile?:       import('../hooks/useUserProfile').UserProfile;
+  onSaveSnapshot?:    (snap: any) => void;
+  buildResumeContext?: (sessionId: string) => string;
+  // Error logging
+  onLogError?: (source: string, message: string, detail?: string) => void;
+  onLogWarn?:  (source: string, message: string) => void;
+  onLogInfo?:  (source: string, message: string) => void;
 }
 
-export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwitch, onNavigateMedia, onKbRefresh }) => {
+export const Chat: React.FC<Props> = ({
+  sessionId, onSessionReset, onProviderSwitch, onNavigateMedia, onKbRefresh,
+  userProfile, onSaveSnapshot, buildResumeContext,
+  onLogError, onLogWarn, onLogInfo,
+}) => {
   const [messages,      setMessages]      = useState<Message[]>(() => {
     const restored = restoreChat(sessionId);
     return restored.length > 0 ? restored : [defaultWelcome()];
@@ -613,7 +628,12 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwi
 
       // explicitFocusId takes precedence over state (avoids stale closure after setFocusSourceId)
       const activeFocusId = explicitFocusId ?? focusSourceId;
-      for await (const event of streamMessage(userText, replyMode, sessId, abort.signal, image, activeFocusId, personaOverride ?? resolvedPersona)) {
+      // Build personalisation context: user profile + session memory resume context
+      const profileCtx  = userProfile ? profileToContext(userProfile) : '';
+      const resumeCtx   = buildResumeContext ? buildResumeContext(sessId) : '';
+      const userContext = [profileCtx, resumeCtx].filter(Boolean).join('\n\n') || undefined;
+
+      for await (const event of streamMessage(userText, replyMode, sessId, abort.signal, image, activeFocusId, personaOverride ?? resolvedPersona, userContext)) {
         if (event.error)   { throw new Error(event.error); }
         if (event.sources) { sources = event.sources; }
         if (event.token) {
@@ -631,12 +651,25 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwi
           if (liveRegionRef.current) {
             liveRegionRef.current.textContent = `AI Tutor responded: ${fullContent.slice(0, 100)}`;
           }
+          // Auto-save session snapshot so Memory panel can resume later
+          onSaveSnapshot?.({
+            sessionId: sessId,
+            savedAt:   new Date().toISOString(),
+            mode:      replyMode,
+            persona:   personaOverride ?? resolvedPersona,
+            messageCount: 0, // will be overridden by App via deriveTopic
+            lastUserMsg:  userText.slice(0, 120),
+            aiSummary:    fullContent.replace(/[#*`_~]/g, '').slice(0, 200),
+            messages:     [], // App reads real messages from localStorage
+          });
+          onLogInfo?.('Chat', `Response complete (${fullContent.length} chars)`);
         }
       }
     } catch (err: any) {
       if (err.name === 'AbortError') return;
       const msg = err.message || 'Unknown error';
       setError(msg);
+      onLogError?.('Chat', msg, err.stack);
       setMessages(prev => prev.map(m =>
         m.id === placeholder.id ? { ...m, content: `⚠️ ${msg}`, streaming: false, isError: true } : m
       ));
@@ -733,11 +766,46 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwi
           await streamReply(questionPart, mode, currentSessId, undefined, undefined, newSourceId, resolvedPersona);
         }
       } catch (e: any) {
+        onLogError?.('URLIngest', `Could not load URL: ${e.message}`, e.stack);
         setMessages(prev => prev.map(m =>
           m.id === loadingMsg.id
             ? { ...m, streaming: false, content: `⚠️ Could not load URL: ${e.message}`, isError: true }
             : m
         ));
+      }
+      return;
+    }
+
+    // ── Web search intent detection ────────────────────────────────────────────
+    const searchMatch = trimmed.match(SEARCH_PATTERN);
+    if (searchMatch && !attachedImage) {
+      const query = searchMatch[1].trim().replace(/[?!.]+$/, '');
+      const searchingMsg: Message = {
+        id: makeId(), role: 'user', content: trimmed, timestamp: new Date(),
+      };
+      const loadingMsg: Message = {
+        id: makeId(), role: 'assistant', content: `🔍 Searching the web for "${query}"…`,
+        timestamp: new Date(), streaming: true,
+      };
+      setMessages(prev => cappedMessages(prev, searchingMsg, loadingMsg));
+      setIsLoading(true);
+
+      try {
+        const searchRes = await webSearch(query);
+        // Remove the loading bubble
+        setMessages(prev => prev.filter(m => m.id !== loadingMsg.id));
+        onLogInfo?.('WebSearch', `Found ${searchRes.results.length} results for "${query}"`);
+        // Stream a reply using web search results as extra context
+        const augmentedQuery = `The user searched the web for: "${query}"\n\nWeb search results:\n${searchRes.summary}\n\nUsing these results (and your own knowledge if needed), please answer the user's original question: ${trimmed}`;
+        await streamReply(augmentedQuery, 'chat', currentSessId, undefined, undefined, undefined, resolvedPersona);
+      } catch (err: any) {
+        onLogError?.('WebSearch', err.message, err.stack);
+        setMessages(prev => prev.map(m =>
+          m.id === loadingMsg.id
+            ? { ...m, streaming: false, content: `⚠️ Web search failed: ${err.message}`, isError: true }
+            : m
+        ));
+        setIsLoading(false);
       }
       return;
     }

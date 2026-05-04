@@ -15,6 +15,8 @@ const ChatBodySchema = z.object({
   imageBase64:    z.string().max(1_400_000).optional(),
   imageMimeType:  z.enum(ALLOWED_IMAGE_MIME).optional(),
   focusSourceId:  z.string().uuid().optional(),
+  // User profile + session memory injected by the client — prepended to system context
+  userContext:    z.string().max(2000).optional(),
 }).superRefine((data, ctx) => {
   if ((data.imageBase64 && !data.imageMimeType) || (!data.imageBase64 && data.imageMimeType)) {
     ctx.addIssue({
@@ -36,7 +38,7 @@ export function createChatRouter(agent: TeacherAgent): Router {
       return;
     }
 
-    const { message, mode, persona, sessionId = ANONYMOUS_SESSION, stream, imageBase64, imageMimeType, focusSourceId } = parsed.data;
+    const { message, mode, persona, sessionId = ANONYMOUS_SESSION, stream, imageBase64, imageMimeType, focusSourceId, userContext } = parsed.data;
     const imageData = imageBase64 && imageMimeType ? { base64: imageBase64, mimeType: imageMimeType } : undefined;
     const assignedPersona = persona?.trim() || 'AI Tutor';
 
@@ -48,7 +50,7 @@ export function createChatRouter(agent: TeacherAgent): Router {
       res.flushHeaders();
 
       try {
-        for await (const event of agent.stream(message, mode as TeachMode, sessionId, imageData, focusSourceId, assignedPersona)) {
+        for await (const event of agent.stream(message, mode as TeachMode, sessionId, imageData, focusSourceId, assignedPersona, userContext)) {
           res.write(`data: ${JSON.stringify(event)}\n\n`);
         }
       } catch (err) {
@@ -64,7 +66,7 @@ export function createChatRouter(agent: TeacherAgent): Router {
 
     // ── Non-streaming path ────────────────────────────────────────────────────
     try {
-      const result = await agent.ask(message, mode as TeachMode, sessionId, assignedPersona);
+      const result = await agent.ask(message, mode as TeachMode, sessionId, assignedPersona, userContext);
       res.status(200).json(result);
     } catch (err) {
       if (err instanceof LLMError) {

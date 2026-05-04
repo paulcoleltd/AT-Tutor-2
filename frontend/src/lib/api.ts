@@ -98,11 +98,13 @@ export async function* streamMessage(
   image?: ImageAttachment,
   focusSourceId?: string,
   persona?: string,
+  userContext?: string,   // serialised user profile + session memory context
 ): AsyncGenerator<StreamEvent> {
   const safePersona = persona?.trim().slice(0, 80);
   const body: Record<string, unknown> = { message, mode, sessionId, stream: true, persona: safePersona };
-  if (image)         { body.imageBase64 = image.base64; body.imageMimeType = image.mimeType; }
+  if (image)       { body.imageBase64 = image.base64; body.imageMimeType = image.mimeType; }
   if (focusSourceId) { body.focusSourceId = focusSourceId; }
+  if (userContext)   { body.userContext = userContext.slice(0, 2000); }
   const res = await fetch(`${BASE_URL}/chat`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -176,6 +178,16 @@ export async function fetchTtsBlob(text: string, voice: TtsVoice = 'nova'): Prom
   });
   if (!res.ok) throw new Error(`TTS error: HTTP ${res.status}`);
   return res.blob();
+}
+
+export interface SearchResult {
+  title:    string;
+  snippet:  string;
+  url?:     string;
+}
+
+export async function webSearch(query: string): Promise<{ query: string; results: SearchResult[]; summary: string }> {
+  return handle(await fetch(`${BASE_URL}/search?q=${encodeURIComponent(query)}`));
 }
 
 export async function getHealth(): Promise<{

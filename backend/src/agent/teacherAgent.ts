@@ -99,7 +99,7 @@ export class TeacherAgent {
     private readonly sessions: SessionStore,
   ) {}
 
-  async ask(userText: string, mode: TeachMode = 'explain', sessionId: string, persona?: string): Promise<TeachResponse> {
+  async ask(userText: string, mode: TeachMode = 'explain', sessionId: string, persona?: string, userContext?: string): Promise<TeachResponse> {
     if (!userText?.trim()) throw new Error('TeacherAgent.ask: userText must not be empty.');
 
     const { chunks, sources } = await this.brain.retrieve(userText);
@@ -108,7 +108,7 @@ export class TeacherAgent {
       : '(No documents uploaded yet. Answer from general knowledge.)';
 
     const instruction = MODE_INSTRUCTIONS[mode] ?? MODE_INSTRUCTIONS.explain;
-    const userPrompt  = buildPrompt(contextStr, instruction, userText, persona);
+    const userPrompt  = buildPrompt(contextStr, instruction, userText, persona, userContext);
     const history     = this.sessions.getHistory(sessionId);
 
     let answer: string;
@@ -123,7 +123,7 @@ export class TeacherAgent {
     return { answer, sources };
   }
 
-  async *stream(userText: string, mode: TeachMode = 'explain', sessionId: string, imageData?: ImageData, focusSourceId?: string, persona?: string): AsyncGenerator<{ token?: string; sources?: string[]; done?: boolean }> {
+  async *stream(userText: string, mode: TeachMode = 'explain', sessionId: string, imageData?: ImageData, focusSourceId?: string, persona?: string, userContext?: string): AsyncGenerator<{ token?: string; sources?: string[]; done?: boolean }> {
     if (!userText?.trim()) throw new Error('TeacherAgent.stream: userText must not be empty.');
 
     const { chunks, sources, focusSourceHit }: RetrievalResult = await this.brain.retrieve(userText, undefined, focusSourceId);
@@ -161,11 +161,20 @@ export class TeacherAgent {
   }
 }
 
-function buildPrompt(context: string, instruction: string, userText: string, persona?: string): string {
+function buildPrompt(context: string, instruction: string, userText: string, persona?: string, userContext?: string): string {
   const safePersona = sanitizePersona(persona);
   const personaInstruction = PERSONA_INSTRUCTIONS[safePersona]
     ?? `You are a helpful assistant with this style: ${safePersona}. Stay polite, factual, and transparent.`;
 
-  const roleBlock = `ASSIGNED ROLE:\n${personaInstruction}\n\n`;
-  return `CONTEXT FROM KNOWLEDGE BASE:\n${context}\n\n${roleBlock}INSTRUCTION:\n${instruction}\n\nUSER SAID:\n${userText}`.trim();
+  const roleBlock    = `ASSIGNED ROLE:\n${personaInstruction}\n\n`;
+  const profileBlock = userContext?.trim()
+    ? `${userContext.trim()}\n\n`
+    : '';
+
+  return [
+    `CONTEXT FROM KNOWLEDGE BASE:\n${context}`,
+    profileBlock + roleBlock.trim(),
+    `INSTRUCTION:\n${instruction}`,
+    `USER SAID:\n${userText}`,
+  ].join('\n\n').trim();
 }
