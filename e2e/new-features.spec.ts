@@ -313,16 +313,16 @@ test.describe('Code Block Copy Button', () => {
   test('markdown code block renders as <pre> element in assistant message', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    // Inject an assistant message containing a fenced code block
     const chatKey = await page.evaluate(() =>
       Object.keys(localStorage).find(k => k.startsWith('ai-tutor-chat-')) ?? 'ai-tutor-chat-codetest'
     );
+    // Must include a user message so persistChat's real-conversation guard
+    // does not discard the stored messages on reload
     await page.evaluate((key) => {
-      localStorage.setItem(key, JSON.stringify([{
-        id: 'c1', role: 'assistant',
-        content: '```python\nprint("hello world")\n```',
-        timestamp: new Date().toISOString(),
-      }]));
+      localStorage.setItem(key, JSON.stringify([
+        { id: 'u1', role: 'user', content: 'Show me a Python example', timestamp: new Date().toISOString() },
+        { id: 'c1', role: 'assistant', content: '```python\nprint("hello world")\n```', timestamp: new Date().toISOString() },
+      ]));
     }, chatKey);
     await page.reload();
     await page.waitForLoadState('networkidle');
@@ -336,15 +336,14 @@ test.describe('Code Block Copy Button', () => {
       Object.keys(localStorage).find(k => k.startsWith('ai-tutor-chat-')) ?? 'ai-tutor-chat-copybtn'
     );
     await page.evaluate((key) => {
-      localStorage.setItem(key, JSON.stringify([{
-        id: 'd1', role: 'assistant',
-        content: '```js\nconsole.log("copy test");\n```',
-        timestamp: new Date().toISOString(),
-      }]));
+      localStorage.setItem(key, JSON.stringify([
+        { id: 'u2', role: 'user', content: 'Write JS code', timestamp: new Date().toISOString() },
+        { id: 'd1', role: 'assistant', content: '```js\nconsole.log("copy test");\n```', timestamp: new Date().toISOString() },
+      ]));
     }, chatKey);
     await page.reload();
     await page.waitForLoadState('networkidle');
-    // Copy button lives in the code wrapper — make it visible via JS and find it
+    // Reveal Copy button (hidden behind opacity-0 until hover) and assert it exists
     await page.evaluate(() => {
       document.querySelectorAll<HTMLElement>('[class*="group"]').forEach(el => {
         const btn = el.querySelector<HTMLElement>('button');
