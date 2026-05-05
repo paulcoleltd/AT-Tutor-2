@@ -77,7 +77,7 @@ export function createApp() {
       availableProviders: getAvailableProviders(),
       knowledgeBase: {
         totalChunks: kb.totalChunks,
-        sources: kb.sources.map(s => ({ sourceId: s.sourceId, filename: s.filename, chunks: s.chunks, type: s.type })),
+        sourceCount: kb.sources.length,
       },
       sessions: sessions.activeCount,
       uptime: process.uptime(),
