@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import pdfParse from 'pdf-parse';
+import { PDFParse } from 'pdf-parse';
 import { ingestDocument } from '../brain/ingest';
 import { VectorStore } from '../brain/vectorStore';
 
@@ -115,8 +115,9 @@ export function createUploadUrlRouter(store: VectorStore): Router {
           res.status(413).json({ error: 'Remote resource exceeds the 20 MB size limit.' });
           return;
         }
-        const data = await pdfParse(buf);
-        content = data.text;
+        const parser = new PDFParse({ data: new Uint8Array(buf) });
+        const data   = await parser.getText();
+        content      = data.text;
         type    = 'pdf';
       } else {
         const text = await upstream.text();
