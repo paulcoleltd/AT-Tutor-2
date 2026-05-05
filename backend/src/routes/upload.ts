@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
-import pdfParse from 'pdf-parse';
+import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
 import { v4 as uuidv4 } from 'uuid';
 import OpenAI from 'openai';
@@ -95,8 +95,9 @@ export function createUploadRouter(store: VectorStore): Router {
     try {
       // ── Text documents ──────────────────────────────────────────────────────
       if (ext === '.pdf') {
-        const data = await pdfParse(file.buffer);
-        content    = data.text;
+        const parser = new PDFParse({ data: new Uint8Array(file.buffer) });
+        const data   = await parser.getText();
+        content      = data.text;
         type       = 'pdf';
       } else if (ext === '.md' || ext === '.markdown') {
         content = file.buffer.toString('utf-8');
