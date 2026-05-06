@@ -52,10 +52,12 @@ jest.mock('../brain/ingest', () => ({
   ingestDocument: jest.fn().mockResolvedValue({ chunksAdded: 3 }),
 }));
 
-// ─── Mock: pdf-parse (upload tests with PDF buffers) ──────────────────────────
-jest.mock('pdf-parse', () =>
-  jest.fn().mockResolvedValue({ text: 'Mock PDF text content for testing.' }),
-);
+// ─── Mock: pdf-parse v2 class-based API ──────────────────────────────────────
+jest.mock('pdf-parse', () => ({
+  PDFParse: jest.fn().mockImplementation(() => ({
+    getText: jest.fn().mockResolvedValue({ text: 'Mock PDF text content for testing.' }),
+  })),
+}));
 
 // ─── App import (after env + mocks are set) ───────────────────────────────────
 import { createApp } from '../app';
@@ -88,14 +90,14 @@ describe('GET /api/health', () => {
     expect(res.body).toHaveProperty('availableProviders');
     expect(res.body).toHaveProperty('knowledgeBase');
     expect(res.body.knowledgeBase).toHaveProperty('totalChunks');
-    expect(res.body.knowledgeBase).toHaveProperty('sources');
+    expect(res.body.knowledgeBase).toHaveProperty('sourceCount');
     expect(res.body).toHaveProperty('sessions');
     expect(res.body).toHaveProperty('uptime');
   });
 
-  it('knowledgeBase.sources is an array', async () => {
+  it('knowledgeBase.sourceCount is a number', async () => {
     const res = await request(app).get('/api/health');
-    expect(Array.isArray(res.body.knowledgeBase.sources)).toBe(true);
+    expect(typeof res.body.knowledgeBase.sourceCount).toBe('number');
   });
 });
 

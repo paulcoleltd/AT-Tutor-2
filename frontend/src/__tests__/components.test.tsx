@@ -11,33 +11,39 @@ import { renderHook } from '@testing-library/react';
 
 // ─── Mock the entire api module ───────────────────────────────────────────────
 vi.mock('../lib/api', () => ({
-  uploadFile:     vi.fn(),
-  uploadUrl:      vi.fn(),
-  deleteDocument: vi.fn(),
-  getHealth:      vi.fn(),
-  getProvider:    vi.fn(),
-  setProvider:    vi.fn(),
-  clearHistory:   vi.fn(),
-  streamMessage:  vi.fn(),
-  speakWithAI:    vi.fn(),
+  uploadFile:              vi.fn(),
+  uploadFileWithProgress:  vi.fn(),
+  uploadUrl:               vi.fn(),
+  deleteDocument:          vi.fn(),
+  getHealth:               vi.fn(),
+  getKbSources:            vi.fn(),
+  getProvider:             vi.fn(),
+  setProvider:             vi.fn(),
+  clearHistory:            vi.fn(),
+  streamMessage:           vi.fn(),
+  speakWithAI:             vi.fn(),
 }));
 
 import {
   uploadFile,
+  uploadFileWithProgress,
   uploadUrl,
   deleteDocument,
   getHealth,
+  getKbSources,
   getProvider,
   setProvider,
 } from '../lib/api';
 
 // Cast to typed mocks for convenience
-const mockUploadFile     = uploadFile     as ReturnType<typeof vi.fn>;
-const mockUploadUrl      = uploadUrl      as ReturnType<typeof vi.fn>;
-const mockDeleteDocument = deleteDocument as ReturnType<typeof vi.fn>;
-const mockGetHealth      = getHealth      as ReturnType<typeof vi.fn>;
-const mockGetProvider    = getProvider    as ReturnType<typeof vi.fn>;
-const mockSetProvider    = setProvider    as ReturnType<typeof vi.fn>;
+const mockUploadFile             = uploadFile             as ReturnType<typeof vi.fn>;
+const mockUploadFileWithProgress = uploadFileWithProgress as ReturnType<typeof vi.fn>;
+const mockUploadUrl              = uploadUrl              as ReturnType<typeof vi.fn>;
+const mockDeleteDocument         = deleteDocument         as ReturnType<typeof vi.fn>;
+const mockGetHealth              = getHealth              as ReturnType<typeof vi.fn>;
+const mockGetKbSources           = getKbSources           as ReturnType<typeof vi.fn>;
+const mockGetProvider            = getProvider            as ReturnType<typeof vi.fn>;
+const mockSetProvider            = setProvider            as ReturnType<typeof vi.fn>;
 
 // ─── Components / Hooks under test ───────────────────────────────────────────
 import { ThemeToggle }          from '../components/ThemeToggle';
@@ -94,6 +100,7 @@ describe('ThemeToggle', () => {
 describe('FileUpload', () => {
   beforeEach(() => {
     mockUploadFile.mockReset();
+    mockUploadFileWithProgress.mockReset();
     mockUploadUrl.mockReset();
   });
 
@@ -127,12 +134,15 @@ describe('FileUpload', () => {
     expect(screen.getByPlaceholderText(/https:\/\/example\.com/i)).toBeInTheDocument();
   });
 
-  it('calls uploadFile and shows success status after upload', async () => {
-    mockUploadFile.mockResolvedValue({
-      success: true,
-      message: 'Uploaded successfully',
-      provider: 'claude',
-      type: 'pdf',
+  it('calls uploadFileWithProgress and shows success status after upload', async () => {
+    mockUploadFileWithProgress.mockImplementation((_file: File, onProgress?: (pct: number) => void) => {
+      onProgress?.(100);
+      return Promise.resolve({
+        success: true,
+        message: 'Uploaded successfully',
+        provider: 'claude',
+        type: 'pdf',
+      });
     });
 
     render(<FileUpload />);
@@ -144,13 +154,13 @@ describe('FileUpload', () => {
     });
 
     await waitFor(() => {
-      expect(mockUploadFile).toHaveBeenCalledWith(file);
+      expect(mockUploadFileWithProgress).toHaveBeenCalledWith(file, expect.any(Function));
       expect(screen.getByText('Uploaded successfully')).toBeInTheDocument();
     });
   });
 
-  it('shows error status when uploadFile rejects', async () => {
-    mockUploadFile.mockRejectedValue(new Error('Server error'));
+  it('shows error status when uploadFileWithProgress rejects', async () => {
+    mockUploadFileWithProgress.mockRejectedValue(new Error('Server error'));
 
     render(<FileUpload />);
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -182,7 +192,7 @@ describe('FileUpload', () => {
   });
 
   it('calls onUploaded callback after a successful upload', async () => {
-    mockUploadFile.mockResolvedValue({ success: true, message: 'ok' });
+    mockUploadFileWithProgress.mockResolvedValue({ success: true, message: 'ok' });
 
     const onUploaded = vi.fn();
     render(<FileUpload onUploaded={onUploaded} />);
@@ -207,7 +217,7 @@ const EMPTY_HEALTH = {
   status: 'ok',
   provider: 'claude',
   sessions: 0,
-  knowledgeBase: { totalChunks: 0, sources: [] },
+  knowledgeBase: { totalChunks: 0, sourceCount: 0 },
 };
 
 const WITH_DOCS_HEALTH = {
@@ -215,24 +225,27 @@ const WITH_DOCS_HEALTH = {
   provider: 'gemini',
   availableProviders: ['claude', 'gemini'],
   sessions: 1,
-  knowledgeBase: {
-    totalChunks: 42,
-    sources: [
-      { sourceId: 'src-1', filename: 'notes.pdf',  chunks: 20, type: 'pdf'  },
-      { sourceId: 'src-2', filename: 'readme.md',  chunks: 22, type: 'markdown' },
-    ],
-  },
+  knowledgeBase: { totalChunks: 0, sourceCount: 2 },
 };
+
+const WITH_DOCS_SOURCES = [
+  { sourceId: 'src-1', filename: 'notes.pdf',  chunks: 20, type: 'pdf'  },
+  { sourceId: 'src-2', filename: 'readme.md',  chunks: 22, type: 'markdown' },
+];
 
 describe('KnowledgeBaseStatus', () => {
   beforeEach(() => {
     mockGetHealth.mockReset();
+    mockGetKbSources.mockReset();
     mockDeleteDocument.mockReset();
+    // default: sources return empty unless overridden
+    mockGetKbSources.mockResolvedValue([]);
   });
 
   it('renders null (nothing) while health is loading', () => {
-    // getHealth never resolves during this test
+    // Neither getHealth nor getKbSources resolves during this test
     mockGetHealth.mockReturnValue(new Promise(() => {}));
+    mockGetKbSources.mockReturnValue(new Promise(() => {}));
     const { container } = render(<KnowledgeBaseStatus />);
     expect(container.firstChild).toBeNull();
   });
@@ -245,17 +258,19 @@ describe('KnowledgeBaseStatus', () => {
     });
   });
 
-  it('renders chunk and doc counts from health response', async () => {
+  it('renders chunk and doc counts from sources', async () => {
     mockGetHealth.mockResolvedValue(WITH_DOCS_HEALTH);
+    mockGetKbSources.mockResolvedValue(WITH_DOCS_SOURCES);
     render(<KnowledgeBaseStatus />);
     await waitFor(() => {
-      expect(screen.getByText('42')).toBeInTheDocument(); // totalChunks
+      expect(screen.getByText('42')).toBeInTheDocument(); // totalChunks (20+22)
       expect(screen.getByText('2')).toBeInTheDocument();  // sources.length
     });
   });
 
   it('renders document filenames in the list', async () => {
     mockGetHealth.mockResolvedValue(WITH_DOCS_HEALTH);
+    mockGetKbSources.mockResolvedValue(WITH_DOCS_SOURCES);
     render(<KnowledgeBaseStatus />);
     await waitFor(() => {
       expect(screen.getByText('notes.pdf')).toBeInTheDocument();
@@ -265,6 +280,7 @@ describe('KnowledgeBaseStatus', () => {
 
   it('renders the active provider name', async () => {
     mockGetHealth.mockResolvedValue(WITH_DOCS_HEALTH);
+    mockGetKbSources.mockResolvedValue(WITH_DOCS_SOURCES);
     render(<KnowledgeBaseStatus />);
     await waitFor(() => {
       expect(screen.getByText('gemini')).toBeInTheDocument();
@@ -273,6 +289,7 @@ describe('KnowledgeBaseStatus', () => {
 
   it('calls deleteDocument with correct sourceId on delete click', async () => {
     mockGetHealth.mockResolvedValue(WITH_DOCS_HEALTH);
+    mockGetKbSources.mockResolvedValue(WITH_DOCS_SOURCES);
     // After delete, re-fetch returns updated state
     mockDeleteDocument.mockResolvedValue(undefined);
 
@@ -539,13 +556,13 @@ describe('useSession', () => {
 
   it('persists sessionId to sessionStorage', () => {
     const { result } = renderHook(() => useSession());
-    const stored = sessionStorage.getItem('ai-tutor-session-id');
+    const stored = localStorage.getItem('ai-tutor-session-id');
     expect(stored).toBe(result.current.sessionId);
   });
 
   it('reuses an existing sessionId from sessionStorage', () => {
     const existing = '11111111-1111-4111-8111-111111111111';
-    sessionStorage.setItem('ai-tutor-session-id', existing);
+    localStorage.setItem('ai-tutor-session-id', existing);
     const { result } = renderHook(() => useSession());
     expect(result.current.sessionId).toBe(existing);
   });
@@ -571,6 +588,6 @@ describe('useSession', () => {
       newId = result.current.resetSession();
     });
 
-    expect(sessionStorage.getItem('ai-tutor-session-id')).toBe(newId);
+    expect(localStorage.getItem('ai-tutor-session-id')).toBe(newId);
   });
 });
