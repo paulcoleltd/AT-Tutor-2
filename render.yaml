@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: ai-tutor-backend
+    env: node
+    buildCommand: cd backend && npm install && npm run build
+    startCommand: node backend/dist/index.js
+    healthCheckPath: /api/health
+    disk:
+      name: tutor-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: LLM_PROVIDER
+        sync: false
+      - key: CLAUDE_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGIN
+        sync: false
+
+  - type: web
+    name: ai-tutor-frontend
+    env: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
