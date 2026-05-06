@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { getProgress, ProgressData } from '../lib/api';
+import { getProgress, ProgressData, ExamRecord } from '../lib/api';
 
 const GRADE_COLOR: Record<string, string> = {
   A: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-700',
@@ -8,6 +8,25 @@ const GRADE_COLOR: Record<string, string> = {
   D: 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-700',
   F: 'text-red-600    dark:text-red-400    bg-red-50    dark:bg-red-900/30    border-red-200    dark:border-red-700',
 };
+
+function ExamBadge({ record }: { record: ExamRecord }) {
+  const pct   = Math.round((record.score / record.total) * 100);
+  const color = GRADE_COLOR[record.grade] ?? GRADE_COLOR.F;
+  return (
+    <div className={`rounded-xl border px-3 py-2 ${color}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-bold">{record.score}/{record.total} — {record.grade}</span>
+        <span className="text-[10px]">{new Date(record.createdAt).toLocaleDateString()}</span>
+      </div>
+      <div className="mt-1 h-1.5 rounded-full bg-black/10 overflow-hidden">
+        <div className="h-full rounded-full bg-current opacity-50" style={{ width: `${pct}%` }} />
+      </div>
+      {record.improvements.length > 0 && (
+        <p className="text-[10px] mt-1 opacity-80">Review: {record.improvements.slice(0, 2).join(', ')}</p>
+      )}
+    </div>
+  );
+}
 
 const MODE_ICONS: Record<string, string> = {
   explain:   '💡',
@@ -55,7 +74,7 @@ export const LearningProgress: React.FC<Props> = ({ refreshKey }) => {
 
   if (loading || !data) return null;
 
-  const { quiz, grade, streak, topics, modeBreakdown, totalSessions, todaySessions, totalMessages } = data;
+  const { quiz, grade, streak, topics, modeBreakdown, totalSessions, todaySessions, totalMessages, exams, topImprovements } = data;
   const totalModeUses = Object.values(modeBreakdown).reduce((s, v) => s + v, 0);
 
   return (
@@ -168,6 +187,30 @@ export const LearningProgress: React.FC<Props> = ({ refreshKey }) => {
                     );
                   })}
               </div>
+            </div>
+          )}
+
+          {/* Exam history */}
+          {exams.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Exam History</p>
+              <div className="space-y-1.5">
+                {exams.slice(0, 3).map((ex, i) => <ExamBadge key={i} record={ex} />)}
+              </div>
+            </div>
+          )}
+
+          {/* Top improvement areas */}
+          {topImprovements.length > 0 && (
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-3 py-2">
+              <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 mb-1">📚 Focus Areas</p>
+              <ul className="space-y-0.5">
+                {topImprovements.map(t => (
+                  <li key={t} className="text-[11px] text-amber-600 dark:text-amber-300 flex items-center gap-1">
+                    <span>•</span> {t}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

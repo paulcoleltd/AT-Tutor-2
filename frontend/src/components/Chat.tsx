@@ -56,6 +56,7 @@ const MODE_META: Record<TeachMode, { label: string; icon: string; tip: string }>
   chat:      { label: 'Chat',       icon: '💬', tip: 'Free-form conversation' },
   summarize: { label: 'Summarize',  icon: '📋', tip: 'Structured summary of uploaded docs' },
   flashcard: { label: 'Flashcards', icon: '🃏', tip: 'Generate 5 Q&A flashcard pairs' },
+  exam:      { label: 'Exam',       icon: '🎓', tip: 'Take a graded exam with detailed results' },
 };
 
 const ROLE_OPTIONS = [

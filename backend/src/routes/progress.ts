@@ -66,13 +66,38 @@ export function createProgressRouter(): Router {
       "SELECT COUNT(*) AS c FROM messages WHERE role = 'user'"
     ).get() as { c: number }).c;
 
-    // Grade
+    // Grade (driven by quiz accuracy OR last exam if available)
     const grade = accuracy === null ? null
       : accuracy >= 90 ? 'A'
       : accuracy >= 80 ? 'B'
       : accuracy >= 70 ? 'C'
       : accuracy >= 60 ? 'D'
       : 'F';
+
+    // Exam history (last 10)
+    const examRows = db.prepare(`
+      SELECT score, total, grade, improvements, created_at FROM exam_results
+      ORDER BY created_at DESC LIMIT 10
+    `).all() as { score: number; total: number; grade: string; improvements: string; created_at: number }[];
+    const exams = examRows.map(r => ({
+      score:        r.score,
+      total:        r.total,
+      grade:        r.grade,
+      improvements: JSON.parse(r.improvements) as string[],
+      createdAt:    r.created_at,
+    }));
+
+    // Collate all improvement suggestions (most frequent)
+    const improvementCounts = new Map<string, number>();
+    for (const ex of exams) {
+      for (const imp of ex.improvements) {
+        improvementCounts.set(imp, (improvementCounts.get(imp) ?? 0) + 1);
+      }
+    }
+    const topImprovements = [...improvementCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([topic]) => topic);
 
     res.json({
       quiz: { total, correct, accuracy, recentTotal, recentCorrect, recentAccuracy },
@@ -83,6 +108,8 @@ export function createProgressRouter(): Router {
       totalSessions,
       todaySessions,
       totalMessages,
+      exams,
+      topImprovements,
     });
   });
 

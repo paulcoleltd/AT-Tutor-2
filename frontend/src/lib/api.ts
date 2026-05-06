@@ -2,7 +2,7 @@ const BASE_URL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
   : '/api';
 
-export type TeachMode = 'explain' | 'quiz' | 'chat' | 'summarize' | 'flashcard';
+export type TeachMode = 'explain' | 'quiz' | 'chat' | 'summarize' | 'flashcard' | 'exam';
 
 export interface UploadResult {
   success:      boolean;
@@ -19,12 +19,20 @@ export interface ChatResult {
   sources: string[];
 }
 
+export interface ExamResult {
+  score:        number;
+  total:        number;
+  grade:        string;
+  improvements: string[];
+}
+
 export interface StreamEvent {
-  token?:     string;
-  sources?:   string[];
-  done?:      boolean;
-  error?:     string;
-  cleanText?: string; // final stripped text when quiz outcome tag was present
+  token?:      string;
+  sources?:    string[];
+  done?:       boolean;
+  error?:      string;
+  cleanText?:  string;
+  examResult?: ExamResult;
 }
 
 async function handle<T>(res: Response): Promise<T> {
@@ -185,15 +193,25 @@ export async function summarizeSession(sessionId: string): Promise<void> {
   await handle(await fetch(`${BASE_URL}/sessions/${sessionId}/summarize`, { method: 'POST' }));
 }
 
+export interface ExamRecord {
+  score:        number;
+  total:        number;
+  grade:        string;
+  improvements: string[];
+  createdAt:    number;
+}
+
 export interface ProgressData {
-  quiz:          { total: number; correct: number; accuracy: number | null; recentTotal: number; recentCorrect: number; recentAccuracy: number | null };
-  grade:         string | null;
-  streak:        number;
-  topics:        string[];
-  modeBreakdown: Record<string, number>;
-  totalSessions: number;
-  todaySessions: number;
-  totalMessages: number;
+  quiz:             { total: number; correct: number; accuracy: number | null; recentTotal: number; recentCorrect: number; recentAccuracy: number | null };
+  grade:            string | null;
+  streak:           number;
+  topics:           string[];
+  modeBreakdown:    Record<string, number>;
+  totalSessions:    number;
+  todaySessions:    number;
+  totalMessages:    number;
+  exams:            ExamRecord[];
+  topImprovements:  string[];
 }
 
 export async function getProgress(): Promise<ProgressData> {

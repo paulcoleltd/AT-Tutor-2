@@ -51,6 +51,18 @@ export function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_quiz_results_session  ON quiz_results(session_id);
     CREATE INDEX IF NOT EXISTS idx_quiz_results_time     ON quiz_results(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_session_modes_session ON session_modes(session_id);
+
+    CREATE TABLE IF NOT EXISTS exam_results (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id   TEXT    NOT NULL,
+      score        INTEGER NOT NULL,
+      total        INTEGER NOT NULL,
+      grade        TEXT    NOT NULL,
+      improvements TEXT    NOT NULL,
+      created_at   INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_exam_results_time ON exam_results(created_at DESC);
   `);
   return _db;
 }

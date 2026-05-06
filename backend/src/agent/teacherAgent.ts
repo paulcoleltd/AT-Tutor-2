@@ -4,7 +4,7 @@ import { SessionStore } from '../sessions/sessionStore';
 import { MemoryManager } from '../memory/memoryManager';
 import { getDb } from '../db';
 
-export type TeachMode = 'explain' | 'quiz' | 'chat' | 'summarize' | 'flashcard';
+export type TeachMode = 'explain' | 'quiz' | 'chat' | 'summarize' | 'flashcard' | 'exam';
 
 export interface TeachResponse {
   answer:  string;
@@ -25,6 +25,41 @@ const MODE_INSTRUCTIONS: Record<TeachMode, string> = {
     'Produce a structured Markdown summary of the provided context. Use ## headings for major topics, bullet points for key facts, and a **Key Takeaways** section at the end.',
   flashcard:
     'Generate 5 flashcard pairs from the context in this exact Markdown format:\n\n**Q:** [question]\n**A:** [answer]\n\nRepeat for each card. Make questions concise and answers clear.',
+  exam:
+    'You are an expert exam coach and examiner. You design and administer formal exams modelled on real past-paper standards.\n\n' +
+    'EXAM TOPIC DETECTION:\n' +
+    'If the user specifies a subject or topic (e.g. "test me on Python", "exam on World War 2", "biology GCSE"), ' +
+    'base the exam on that subject using your general knowledge AND any relevant content in the knowledge base. ' +
+    'If no topic is specified, use the knowledge base content. ' +
+    'If asked to "coach" or "practise" rather than formally examine, use an interactive coaching style: ' +
+    'ask one question, wait for the answer, give feedback, then move to the next question.\n\n' +
+    'PHASE 1 — GENERATING THE EXAM:\n' +
+    'Write a formal 5-question exam paper modelled on real past-paper style.\n' +
+    'State the subject and level (e.g. "## 📄 Biology GCSE — Practice Paper") at the top.\n' +
+    'Include a time guide (e.g. "Suggested time: 20 minutes") and total marks (10 marks).\n' +
+    'Use VARIED question styles — do NOT use only multiple-choice:\n' +
+    '  • Short-answer ("Explain in 2–3 sentences why…") — most questions should be this type\n' +
+    '  • Definition ("Define X and give a real-world example")\n' +
+    '  • Application ("A student observes X — what does this suggest and why?")\n' +
+    '  • Fill-in-the-blank ("The process of _____ converts X into Y")\n' +
+    '  • True/False with mandatory justification ("True or False — explain your reasoning")\n' +
+    'Show mark allocation per question e.g. **(2 marks)**. Total must equal 10.\n' +
+    'End with: ---\n📝 **Write your answers below, then type SUBMIT when ready for your score.**\n\n' +
+    'PHASE 2 — GRADING (user message contains SUBMIT or provides numbered answers):\n' +
+    'Grade every answer fairly and constructively. For each question:\n' +
+    '  **Q[N]: [question snippet]**\n  ✓ Correct (X/Y marks) — brief positive note\n' +
+    '  OR  ✗ Incorrect (0/Y marks) — state the correct answer and explain why\n' +
+    'Then produce the full result report:\n\n' +
+    '## 📊 Exam Results\n' +
+    '**Score:** X/10 | **Percentage:** Y% | **Grade:** [A/B/C/D/F]\n\n' +
+    '### 💪 Strengths\n[bullet list of topics/concepts the learner demonstrated well]\n\n' +
+    '### 📚 Areas for Improvement\n' +
+    '[specific topics to revisit, with concrete study tips — e.g. mnemonics, recommended reading, practice questions]\n\n' +
+    '### 🎯 Recommended Next Steps\n' +
+    '[e.g. "Use Explain mode on X, generate Flashcards for Y, then attempt a new Exam"]\n\n' +
+    'Finally append on its own NEW line (no other text on that line):\n' +
+    '[EXAM_RESULT:score=X,total=10,grade=G,improvements=topic1|topic2|topic3]\n' +
+    'X = raw score, G = letter grade, improvements = 2–4 weak topic labels separated by |.',
 };
 
 const SYSTEM_PROMPT =
@@ -103,9 +138,14 @@ export class TeacherAgent {
       throw new Error(`Unexpected error in teacher agent: ${(err as Error).message}`);
     }
 
-    const { stripped: answer, outcome } = parseAndStripOutcome(raw);
+    const { stripped: quizStripped, outcome } = parseAndStripOutcome(raw);
+    const { stripped: answer, examResult }    = parseAndStripExamResult(quizStripped);
+
     recordMode(sessionId, mode);
     if (mode === 'quiz' && outcome !== null) recordQuizResult(sessionId, outcome === 'correct');
+    if (mode === 'exam' && examResult) {
+      recordExamResult(sessionId, examResult.score, examResult.total, examResult.grade, examResult.improvements);
+    }
 
     this.sessions.appendMessages(sessionId, userText, answer);
     const msgCount = this.sessions.getSessionMessages(sessionId).length;
@@ -115,7 +155,7 @@ export class TeacherAgent {
     return { answer, sources };
   }
 
-  async *stream(userText: string, mode: TeachMode = 'explain', sessionId: string, imageData?: ImageData, focusSourceId?: string, persona?: string): AsyncGenerator<{ token?: string; sources?: string[]; done?: boolean; cleanText?: string }> {
+  async *stream(userText: string, mode: TeachMode = 'explain', sessionId: string, imageData?: ImageData, focusSourceId?: string, persona?: string): AsyncGenerator<{ token?: string; sources?: string[]; done?: boolean; cleanText?: string; examResult?: { score: number; total: number; grade: string; improvements: string[] } }> {
     if (!userText?.trim()) throw new Error('TeacherAgent.stream: userText must not be empty.');
 
     const { chunks, sources, focusSourceHit }: RetrievalResult = await this.brain.retrieve(userText, undefined, focusSourceId);
@@ -146,25 +186,57 @@ export class TeacherAgent {
       yield { token };
     }
 
-    const { stripped: cleanAnswer, outcome } = parseAndStripOutcome(fullAnswer);
+    const { stripped: quizStripped, outcome }    = parseAndStripOutcome(fullAnswer);
+    const { stripped: cleanAnswer, examResult }  = parseAndStripExamResult(quizStripped);
+    const wasTagged = outcome !== null || examResult !== null;
+
     recordMode(sessionId, mode);
     if (mode === 'quiz' && outcome !== null) recordQuizResult(sessionId, outcome === 'correct');
+    if (mode === 'exam' && examResult) {
+      recordExamResult(sessionId, examResult.score, examResult.total, examResult.grade, examResult.improvements);
+    }
 
-    // If the LLM included the outcome tag, re-emit corrected final token so the
-    // client receives the stripped text (the tag itself was never yielded as a
-    // discrete token, it arrives mid-stream, so we emit a replacement done event
-    // with the clean text so the client can overwrite the last message).
     this.sessions.appendMessages(sessionId, userText, cleanAnswer);
     const msgCount = this.sessions.getSessionMessages(sessionId).length;
     if (msgCount > 0 && msgCount % 16 === 0) {
       void this.memory.generateSummary(sessionId);
     }
-    yield { done: true, cleanText: outcome !== null ? cleanAnswer : undefined };
+    yield {
+      done:       true,
+      cleanText:  wasTagged ? cleanAnswer : undefined,
+      examResult: examResult ?? undefined,
+    };
   }
 
   resetSession(sessionId: string): void {
     this.sessions.clearSession(sessionId);
   }
+}
+
+const EXAM_RESULT_RE = /\[EXAM_RESULT:([^\]]+)\]/i;
+
+function parseAndStripExamResult(text: string): {
+  stripped: string;
+  examResult: { score: number; total: number; grade: string; improvements: string[] } | null;
+} {
+  const m = text.match(EXAM_RESULT_RE);
+  if (!m) return { stripped: text, examResult: null };
+  const params = Object.fromEntries(m[1].split(',').map(p => p.split('=') as [string, string]));
+  const score   = parseInt(params.score  ?? '0', 10);
+  const total   = parseInt(params.total  ?? '5', 10);
+  const grade   = params.grade ?? 'F';
+  const improvements = (params.improvements ?? '').split('|').filter(Boolean);
+  return {
+    stripped:   text.replace(EXAM_RESULT_RE, '').trimEnd(),
+    examResult: { score, total, grade, improvements },
+  };
+}
+
+function recordExamResult(sessionId: string, score: number, total: number, grade: string, improvements: string[]): void {
+  try {
+    getDb().prepare('INSERT INTO exam_results (session_id, score, total, grade, improvements, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(sessionId, score, total, grade, JSON.stringify(improvements), Date.now());
+  } catch { /* non-fatal */ }
 }
 
 const OUTCOME_PASS = /\[PASS\]/i;
