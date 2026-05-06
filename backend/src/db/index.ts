@@ -1,6 +1,18 @@
-import Database from 'better-sqlite3';
 import path from 'path';
-import fs from 'fs';
+import fs   from 'fs';
+import type BetterSqlite3 from 'better-sqlite3';
+
+// Dynamic require so a missing/incompatible native binary doesn't crash the
+// entire serverless function. Falls back to a no-op stub.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let DatabaseCtor: (new (...args: any[]) => BetterSqlite3.Database) | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod = require('better-sqlite3');
+  DatabaseCtor = (mod.default ?? mod) as typeof DatabaseCtor;
+} catch (e) {
+  console.warn('[db] better-sqlite3 unavailable:', (e as Error).message);
+}
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS sessions (
@@ -54,28 +66,60 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_exam_results_time ON exam_results(created_at DESC);
 `;
 
-let _db: Database.Database | null = null;
+// Minimal no-op stub used when SQLite is completely unavailable.
+// All writes silently succeed; all reads return empty results.
+const NOOP_DB = {
+  prepare: () => ({
+    run:  () => ({ changes: 0, lastInsertRowid: 0 }),
+    get:  () => undefined,
+    all:  () => [],
+  }),
+  pragma:  () => [],
+  exec:    () => undefined,
+  close:   () => undefined,
+  transaction: (fn: (...args: unknown[]) => unknown) => fn,
+} as unknown as BetterSqlite3.Database;
 
-export function getDb(): Database.Database {
+let _db: BetterSqlite3.Database | null = null;
+
+export function getDb(): BetterSqlite3.Database {
   if (_db) return _db;
+
+  if (!DatabaseCtor) {
+    console.warn('[db] SQLite unavailable — using no-op stub (no persistence)');
+    _db = NOOP_DB;
+    return _db;
+  }
 
   // Try file-based DB first (persistent platforms: Railway, Render, Docker, local)
   const dataDir = process.env.DATA_DIR ?? path.join(process.cwd(), 'data');
   try {
     fs.mkdirSync(dataDir, { recursive: true });
-    const db = new Database(path.join(dataDir, 'tutor.db'));
+    const db = new DatabaseCtor(path.join(dataDir, 'tutor.db'));
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
     db.exec(SCHEMA);
     _db = db;
     return _db;
   } catch {
-    // Fallback: in-memory DB for ephemeral/serverless environments (Vercel)
-    console.warn('[db] File-based SQLite unavailable — using in-memory store (sessions will not persist across restarts)');
-    const db = new Database(':memory:');
-    db.pragma('foreign_keys = ON');
-    db.exec(SCHEMA);
-    _db = db;
+    // Fallback: /tmp on Vercel/serverless, then pure in-memory
+    for (const dbPath of ['/tmp/tutor.db', ':memory:']) {
+      try {
+        const db = new DatabaseCtor(dbPath);
+        db.pragma('foreign_keys = ON');
+        db.exec(SCHEMA);
+        _db = db;
+        if (dbPath !== ':memory:') {
+          console.warn(`[db] Using ${dbPath} (ephemeral — data lost on cold start)`);
+        } else {
+          console.warn('[db] Using in-memory SQLite (no persistence)');
+        }
+        return _db;
+      } catch { /* try next */ }
+    }
+    // All options exhausted
+    console.warn('[db] All SQLite options failed — using no-op stub');
+    _db = NOOP_DB;
     return _db;
   }
 }

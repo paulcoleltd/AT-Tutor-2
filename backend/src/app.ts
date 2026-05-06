@@ -84,16 +84,23 @@ export function createApp() {
 
   app.get('/api/health', (_req, res) => {
     const kb = brain.getStatus();
+    const keysConfigured = {
+      claude: !!process.env.CLAUDE_API_KEY,
+      openai: !!process.env.OPENAI_API_KEY,
+      gemini: !!process.env.GEMINI_API_KEY,
+    };
+    const anyKey = Object.values(keysConfigured).some(Boolean);
     res.json({
-      status: 'ok',
-      provider: getActiveProvider(),
+      status:            anyKey ? 'ok' : 'degraded',
+      provider:          getActiveProvider(),
       availableProviders: getAvailableProviders(),
+      keysConfigured,
       knowledgeBase: {
         totalChunks: kb.totalChunks,
         sourceCount: kb.sources.length,
       },
       sessions: sessions.activeCount,
-      uptime: process.uptime(),
+      uptime:   process.uptime(),
     });
   });
 

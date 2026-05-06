@@ -1,8 +1,10 @@
 services:
+  # Single web service: backend Express server also serves the React frontend.
+  # The frontend is built first so backend/src/index.ts finds frontend/dist at start.
   - type: web
-    name: ai-tutor-backend
+    name: ai-tutor-agent
     env: node
-    buildCommand: cd backend && npm install && npm run build
+    buildCommand: cd backend && npm install && npm run build && cd ../frontend && npm install && npm run build
     startCommand: node backend/dist/index.js
     healthCheckPath: /api/health
     disk:
@@ -14,8 +16,6 @@ services:
         value: /data
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 4000
       - key: LLM_PROVIDER
         sync: false
       - key: CLAUDE_API_KEY
@@ -26,13 +26,3 @@ services:
         sync: false
       - key: ALLOWED_ORIGIN
         sync: false
-
-  - type: web
-    name: ai-tutor-frontend
-    env: static
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: frontend/dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html

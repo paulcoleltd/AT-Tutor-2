@@ -1,7 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { getHealth, getKbSources, deleteDocument, KbSource } from '../lib/api';
 
-interface HealthInfo { provider: string; availableProviders?: string[]; }
+interface HealthInfo {
+  status:            string;
+  provider:          string;
+  availableProviders?: string[];
+  keysConfigured?:   { claude: boolean; openai: boolean; gemini: boolean };
+}
 
 interface Props { refreshKey?: number; }
 
@@ -139,9 +144,22 @@ export const KnowledgeBaseStatus: React.FC<Props> = ({ refreshKey }) => {
         </div>
       )}
 
+      {/* No API keys warning */}
+      {health.keysConfigured && !Object.values(health.keysConfigured).some(Boolean) && (
+        <div className="mt-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          <p className="font-semibold">No API key configured</p>
+          <p className="mt-0.5 text-amber-600 dark:text-amber-500">
+            Add <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">CLAUDE_API_KEY</code>,{' '}
+            <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">OPENAI_API_KEY</code>, or{' '}
+            <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">GEMINI_API_KEY</code>{' '}
+            to your deployment environment variables.
+          </p>
+        </div>
+      )}
+
       <div className="mt-2 space-y-1 text-xs text-slate-400">
         <div className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 bg-green-400 rounded-full inline-block" />
+          <span className={`w-1.5 h-1.5 rounded-full inline-block ${health.status === 'ok' ? 'bg-green-400' : 'bg-amber-400'}`} />
           Provider: <strong className="text-slate-500 dark:text-slate-300 ml-0.5">{health.provider}</strong>
         </div>
         {health.availableProviders && health.availableProviders.length > 1 && (

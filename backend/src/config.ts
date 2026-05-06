@@ -26,14 +26,21 @@ export const CONFIG = {
 } as const;
 
 export function validateConfig(): void {
-  const warnings: string[] = [];
+  const noKeys = !CONFIG.claudeApiKey && !CONFIG.openaiApiKey && !CONFIG.geminiApiKey;
+  if (noKeys) {
+    console.error(
+      '\n[config] *** NO API KEYS FOUND ***\n' +
+      '  Set at least one of: CLAUDE_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY\n' +
+      '  Chat requests will fail until a key is added.\n'
+    );
+  } else {
+    if (CONFIG.provider === 'claude' && !CONFIG.claudeApiKey)
+      console.warn('[config] WARNING: CLAUDE_API_KEY is missing but LLM_PROVIDER=claude.');
+    if (CONFIG.provider === 'gemini' && !CONFIG.geminiApiKey)
+      console.warn('[config] WARNING: GEMINI_API_KEY is missing but LLM_PROVIDER=gemini.');
+    if (CONFIG.provider === 'openai' && !CONFIG.openaiApiKey)
+      console.warn('[config] WARNING: OPENAI_API_KEY is missing but LLM_PROVIDER=openai.');
+  }
   if (!CONFIG.openaiApiKey)
-    warnings.push('OPENAI_API_KEY is missing — embeddings will not work.');
-  if (CONFIG.provider === 'claude' && !CONFIG.claudeApiKey)
-    warnings.push('CLAUDE_API_KEY is missing but LLM_PROVIDER=claude.');
-  if (CONFIG.provider === 'gemini' && !CONFIG.geminiApiKey)
-    warnings.push('GEMINI_API_KEY is missing but LLM_PROVIDER=gemini.');
-  if (CONFIG.provider === 'openai' && !CONFIG.openaiApiKey)
-    warnings.push('OPENAI_API_KEY is missing but LLM_PROVIDER=openai.');
-  warnings.forEach(w => console.warn(`[config] WARNING: ${w}`));
+    console.warn('[config] WARNING: OPENAI_API_KEY is missing — vector embeddings will use random fallback.');
 }

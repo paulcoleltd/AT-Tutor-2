@@ -7,7 +7,7 @@ const ALLOWED_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'
 
 const ChatBodySchema = z.object({
   message:        z.string().min(1).max(4000),
-  mode:           z.enum(['explain', 'quiz', 'chat', 'summarize', 'flashcard']).optional().default('explain'),
+  mode:           z.enum(['explain', 'quiz', 'chat', 'summarize', 'flashcard', 'exam']).optional().default('explain'),
   persona:        z.string().trim().max(80).regex(/^[^\r\n]*$/, 'Persona cannot contain line breaks.').optional(),
   sessionId:      z.string().uuid().optional(),
   stream:         z.boolean().optional().default(false),
