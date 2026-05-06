@@ -52,9 +52,11 @@ export function createChatRouter(agent: TeacherAgent): Router {
           res.write(`data: ${JSON.stringify(event)}\n\n`);
         }
       } catch (err) {
+        if (err instanceof LLMError) console.error(`[chat] LLM stream error (${err.provider}):`, err.message);
+        else console.error('[chat] Unexpected stream error:', err);
         const errMsg = err instanceof LLMError
-          ? `LLM error (${err.provider}): ${err.message}`
-          : `Unexpected error: ${(err as Error).message}`;
+          ? 'AI service unavailable. Please try again later.'
+          : 'An unexpected error occurred.';
         res.write(`data: ${JSON.stringify({ error: errMsg })}\n\n`);
       } finally {
         res.end();
@@ -69,7 +71,7 @@ export function createChatRouter(agent: TeacherAgent): Router {
     } catch (err) {
       if (err instanceof LLMError) {
         console.error(`[chat] LLM error (${err.provider}):`, err.message);
-        res.status(502).json({ error: `AI provider (${err.provider}) error. Check your API key.` });
+        res.status(502).json({ error: 'AI service unavailable. Please try again later.' });
         return;
       }
       console.error('[chat] Unexpected error:', err);

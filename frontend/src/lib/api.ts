@@ -2,7 +2,7 @@ const BASE_URL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
   : '/api';
 
-export type TeachMode = 'explain' | 'quiz' | 'chat' | 'summarize' | 'flashcard';
+export type TeachMode = 'explain' | 'quiz' | 'chat' | 'summarize' | 'flashcard' | 'exam';
 
 export interface UploadResult {
   success:      boolean;
@@ -19,11 +19,20 @@ export interface ChatResult {
   sources: string[];
 }
 
+export interface ExamResult {
+  score:        number;
+  total:        number;
+  grade:        string;
+  improvements: string[];
+}
+
 export interface StreamEvent {
-  token?:   string;
-  sources?: string[];
-  done?:    boolean;
-  error?:   string;
+  token?:      string;
+  sources?:    string[];
+  done?:       boolean;
+  error?:      string;
+  cleanText?:  string;
+  examResult?: ExamResult;
 }
 
 async function handle<T>(res: Response): Promise<T> {
@@ -51,6 +60,13 @@ export async function uploadUrl(url: string): Promise<UploadResult> {
 
 export async function deleteDocument(sourceId: string): Promise<void> {
   await handle(await fetch(`${BASE_URL}/upload/${sourceId}`, { method: 'DELETE' }));
+}
+
+export interface KbSource { sourceId: string; filename: string; chunks: number; type: string; }
+
+export async function getKbSources(): Promise<KbSource[]> {
+  const data = await handle<{ sources: KbSource[] }>(await fetch(`${BASE_URL}/upload/sources`));
+  return data.sources;
 }
 
 export async function sendMessage(message: string, mode: TeachMode, sessionId: string, persona?: string): Promise<ChatResult> {
@@ -150,12 +166,83 @@ export async function fetchTtsBlob(text: string, voice: TtsVoice = 'nova'): Prom
   return res.blob();
 }
 
+export interface SessionMeta {
+  id:        string;
+  title:     string | null;
+  createdAt: number;
+  lastUsed:  number;
+  summary:   string | null;
+}
+
+export interface SessionMessage {
+  role:    'user' | 'assistant';
+  content: string;
+}
+
+export async function getSessions(): Promise<SessionMeta[]> {
+  const data = await handle<{ sessions: SessionMeta[] }>(await fetch(`${BASE_URL}/sessions`));
+  return data.sessions;
+}
+
+export async function getSessionMessages(sessionId: string): Promise<SessionMessage[]> {
+  const data = await handle<{ messages: SessionMessage[] }>(await fetch(`${BASE_URL}/sessions/${sessionId}/messages`));
+  return data.messages;
+}
+
+export async function summarizeSession(sessionId: string): Promise<void> {
+  await handle(await fetch(`${BASE_URL}/sessions/${sessionId}/summarize`, { method: 'POST' }));
+}
+
+export interface ExamRecord {
+  score:        number;
+  total:        number;
+  grade:        string;
+  improvements: string[];
+  createdAt:    number;
+}
+
+export interface ProgressData {
+  quiz:             { total: number; correct: number; accuracy: number | null; recentTotal: number; recentCorrect: number; recentAccuracy: number | null };
+  grade:            string | null;
+  streak:           number;
+  topics:           string[];
+  modeBreakdown:    Record<string, number>;
+  totalSessions:    number;
+  todaySessions:    number;
+  totalMessages:    number;
+  exams:            ExamRecord[];
+  topImprovements:  string[];
+}
+
+export interface CertDomain { name: string; weight: number; }
+export interface CertInfo {
+  code:          string;
+  name:          string;
+  vendor:        string;
+  category:      string;
+  level:         string;
+  questionCount: number;
+  timeMinutes:   number;
+  passingScore:  string;
+  domains:       CertDomain[];
+  studyTips:     string[];
+}
+
+export async function getCertifications(): Promise<CertInfo[]> {
+  const data = await handle<{ certifications: CertInfo[] }>(await fetch(`${BASE_URL}/certifications`));
+  return data.certifications;
+}
+
+export async function getProgress(): Promise<ProgressData> {
+  return handle<ProgressData>(await fetch(`${BASE_URL}/progress`));
+}
+
 export async function getHealth(): Promise<{
   status: string;
   provider: string;
   availableProviders?: LLMProvider[];
   sessions: number;
-  knowledgeBase: { totalChunks: number; sources: { sourceId: string; filename: string; chunks: number; type: string }[] };
+  knowledgeBase: { totalChunks: number; sourceCount: number };
 }> {
   return handle(await fetch(`${BASE_URL}/health`));
 }

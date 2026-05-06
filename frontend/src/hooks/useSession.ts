@@ -4,22 +4,28 @@ import { v4 as uuidv4 } from 'uuid';
 const SESSION_KEY = 'ai-tutor-session-id';
 
 function getOrCreateSessionId(): string {
-  let id = sessionStorage.getItem(SESSION_KEY);
+  let id = localStorage.getItem(SESSION_KEY);
   if (!id) {
     id = uuidv4();
-    sessionStorage.setItem(SESSION_KEY, id);
+    localStorage.setItem(SESSION_KEY, id);
   }
   return id;
 }
 
 export function useSession() {
-  const [sessionId] = useState<string>(getOrCreateSessionId);
+  const [sessionId, setSessionId] = useState<string>(getOrCreateSessionId);
 
   const resetSession = () => {
     const newId = uuidv4();
-    sessionStorage.setItem(SESSION_KEY, newId);
+    localStorage.setItem(SESSION_KEY, newId);
+    setSessionId(newId);
     return newId;
   };
 
-  return { sessionId, resetSession };
+  const resumeSession = (id: string) => {
+    localStorage.setItem(SESSION_KEY, id);
+    setSessionId(id);
+  };
+
+  return { sessionId, resetSession, resumeSession };
 }

@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
-import pdfParse from 'pdf-parse';
+import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
 import { v4 as uuidv4 } from 'uuid';
 import OpenAI from 'openai';
@@ -95,8 +95,9 @@ export function createUploadRouter(store: VectorStore): Router {
     try {
       // ── Text documents ──────────────────────────────────────────────────────
       if (ext === '.pdf') {
-        const data = await pdfParse(file.buffer);
-        content    = data.text;
+        const parser = new PDFParse({ data: new Uint8Array(file.buffer) });
+        const data   = await parser.getText();
+        content      = data.text;
         type       = 'pdf';
       } else if (ext === '.md' || ext === '.markdown') {
         content = file.buffer.toString('utf-8');
@@ -187,6 +188,10 @@ export function createUploadRouter(store: VectorStore): Router {
   });
 
   // DELETE /api/upload/:sourceId
+  router.get('/sources', (_req: Request, res: Response): void => {
+    res.json({ sources: store.getSources() });
+  });
+
   router.delete('/:sourceId', (req: Request, res: Response): void => {
     const { sourceId } = req.params;
     const VALID_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

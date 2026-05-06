@@ -1,35 +1,40 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { getHealth, deleteDocument } from '../lib/api';
+import { getHealth, getKbSources, deleteDocument, KbSource } from '../lib/api';
 
-interface Source { sourceId: string; filename: string; chunks: number; type: string; }
-
-interface HealthResponse {
-  provider: string;
-  availableProviders?: string[];
-  knowledgeBase: { totalChunks: number; sources: Source[] };
-}
+interface HealthInfo { provider: string; availableProviders?: string[]; }
 
 interface Props { refreshKey?: number; }
 
 export const KnowledgeBaseStatus: React.FC<Props> = ({ refreshKey }) => {
-  const [health,        setHealth]        = useState<HealthResponse | null>(null);
-  const [error,         setError]         = useState(false);
+  const [health,         setHealth]         = useState<HealthInfo | null>(null);
+  const [sources,        setSources]        = useState<KbSource[]>([]);
+  const [error,          setError]          = useState(false);
   const [errorDismissed, setErrorDismissed] = useState(false);
-  const [deleting,      setDeleting]      = useState<string | null>(null);
-  const [deleteError,   setDeleteError]   = useState<string | null>(null);
+  const [deleting,       setDeleting]       = useState<string | null>(null);
+  const [deleteError,    setDeleteError]    = useState<string | null>(null);
 
-  const fetchHealth = useCallback(async () => {
-    try { setHealth(await getHealth()); setError(false); setErrorDismissed(false); }
-    catch { setError(true); }
+  const fetchData = useCallback(async () => {
+    try {
+      const [h, s] = await Promise.all([getHealth(), getKbSources()]);
+      setHealth(h);
+      setSources(s);
+      setError(false);
+      setErrorDismissed(false);
+    } catch {
+      setError(true);
+    }
   }, []);
 
-  // Poll every 30 s — KB changes only on upload/delete, not continuously
-  useEffect(() => { fetchHealth(); const t = setInterval(fetchHealth, 30_000); return () => clearInterval(t); }, [fetchHealth, refreshKey]);
+  useEffect(() => {
+    fetchData();
+    const t = setInterval(fetchData, 30_000);
+    return () => clearInterval(t);
+  }, [fetchData, refreshKey]);
 
   const handleDelete = async (sourceId: string) => {
     setDeleting(sourceId);
     setDeleteError(null);
-    try { await deleteDocument(sourceId); await fetchHealth(); }
+    try { await deleteDocument(sourceId); await fetchData(); }
     catch (e: any) { setDeleteError(e.message); }
     finally { setDeleting(null); }
   };
@@ -42,15 +47,13 @@ export const KnowledgeBaseStatus: React.FC<Props> = ({ refreshKey }) => {
           onClick={() => setErrorDismissed(true)}
           title="Dismiss error"
           className="flex-shrink-0 w-5 h-5 rounded-full bg-red-200 dark:bg-red-800 hover:bg-red-300 dark:hover:bg-red-700 flex items-center justify-center text-[10px] font-bold transition-colors"
-        >
-          ✕
-        </button>
+        >✕</button>
       </div>
     </div>
   );
   if (!health) return null;
 
-  const { totalChunks, sources } = health.knowledgeBase;
+  const totalChunks = sources.reduce((s, d) => s + d.chunks, 0);
 
   const typeIcon = (t: string) => {
     switch (t) {

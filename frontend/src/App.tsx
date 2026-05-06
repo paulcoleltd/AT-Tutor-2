@@ -4,6 +4,7 @@ import { FileUpload } from './components/FileUpload';
 import { KnowledgeBaseStatus } from './components/KnowledgeBaseStatus';
 import { ProviderSwitcher } from './components/ProviderSwitcher';
 import { MediaPlayer } from './components/MediaPlayer';
+import { LearningProgress } from './components/LearningProgress';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useDarkMode } from './hooks/useDarkMode';
@@ -12,7 +13,7 @@ import { LLMProvider } from './lib/api';
 
 const App: React.FC = () => {
   const { dark, toggle } = useDarkMode();
-  const { sessionId, resetSession } = useSession();
+  const { sessionId, resetSession, resumeSession } = useSession();
   const [kbRefreshKey, setKbRefreshKey] = useState(0);
   const [activeProvider, setActiveProvider] = useState<LLMProvider>('claude');
   const [mediaUrl, setMediaUrl] = useState<string | undefined>(undefined);
@@ -48,6 +49,10 @@ const App: React.FC = () => {
 
           <ErrorBoundary>
             <KnowledgeBaseStatus refreshKey={kbRefreshKey} />
+          </ErrorBoundary>
+
+          <ErrorBoundary>
+            <LearningProgress refreshKey={kbRefreshKey} />
           </ErrorBoundary>
 
           <ErrorBoundary>
@@ -104,6 +109,7 @@ const App: React.FC = () => {
             <Chat
               sessionId={sessionId}
               onSessionReset={resetSession}
+              onSessionResume={resumeSession}
               activeProvider={activeProvider}
               onProviderSwitch={setActiveProvider}
               onNavigateMedia={url => setMediaUrl(url)}

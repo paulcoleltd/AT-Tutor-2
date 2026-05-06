@@ -13,6 +13,11 @@ import { createUploadUrlRouter } from './routes/uploadUrl';
 import { createConfigRouter } from './routes/config';
 import { createChatRouter } from './routes/chat';
 import { createTtsRouter } from './routes/tts';
+import { createSessionsRouter } from './routes/sessions';
+import { createProgressRouter } from './routes/progress';
+import { createCertificationsRouter } from './routes/certifications';
+import { MemoryManager } from './memory/memoryManager';
+import { getDb } from './db';
 import { getAvailableProviders } from './models/llmRouter';
 import { getActiveProvider } from './runtimeConfig';
 
@@ -58,16 +63,22 @@ export function createApp() {
   app.use(express.json({ limit: '1mb' }));
   app.use(makeLimit(CONFIG.rateLimitMax));
 
-  const store = new VectorStore();
-  const brain = new Brain(store);
+  getDb(); // initialise SQLite (creates data/tutor.db if needed)
+
+  const store    = new VectorStore();
+  const brain    = new Brain(store);
   const sessions = new SessionStore();
-  const agent = new TeacherAgent(brain, sessions);
+  const memory   = new MemoryManager(sessions);
+  const agent    = new TeacherAgent(brain, sessions, memory);
 
   app.use('/api/config', createConfigRouter());
   app.use('/api/upload/url', createUploadUrlRouter(store));
   app.use('/api/upload', createUploadRouter(store));
   app.use('/api/chat', createChatRouter(agent));
   app.use('/api/tts', createTtsRouter());
+  app.use('/api/sessions', createSessionsRouter(sessions, memory));
+  app.use('/api/progress', createProgressRouter());
+  app.use('/api/certifications', createCertificationsRouter());
 
   app.get('/api/health', (_req, res) => {
     const kb = brain.getStatus();
@@ -77,7 +88,7 @@ export function createApp() {
       availableProviders: getAvailableProviders(),
       knowledgeBase: {
         totalChunks: kb.totalChunks,
-        sources: kb.sources.map(s => ({ sourceId: s.sourceId, filename: s.filename, chunks: s.chunks, type: s.type })),
+        sourceCount: kb.sources.length,
       },
       sessions: sessions.activeCount,
       uptime: process.uptime(),
@@ -91,5 +102,5 @@ export function createApp() {
     res.status(500).json({ error: 'An unexpected error occurred.' });
   });
 
-  return { app, store, brain, agent };
+  return { app, store, brain, agent, sessions, memory };
 }

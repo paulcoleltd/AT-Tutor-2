@@ -16,3 +16,4 @@ coverage/
 e2e-report/
 test-results/
 playwright-report/
+backend/data/

@@ -1,8 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { streamMessage, clearHistory, speakWithAI, setProvider, uploadUrl, TeachMode, LLMProvider, ImageAttachment } from '../lib/api';
+import { streamMessage, clearHistory, speakWithAI, setProvider, uploadUrl, getSessionMessages, TeachMode, LLMProvider, ImageAttachment, SessionMeta } from '../lib/api';
 import { VoiceControls } from './VoiceControls';
+import { SessionHistory } from './SessionHistory';
+import { CertificationSelector } from './CertificationSelector';
+import type { CertInfo } from '../lib/api';
 
 // Detect "navigate to / go to / open / load / check / look at <URL>" patterns
 const NAV_PATTERN = /(?:navigate\s+to|go\s+to|open|load|check\s+out?|look\s+at|fetch|read|analyse|analyze|play|watch|listen\s+to)\s+(https?:\/\/[^\s]+)/i;
@@ -55,6 +58,7 @@ const MODE_META: Record<TeachMode, { label: string; icon: string; tip: string }>
   chat:      { label: 'Chat',       icon: '💬', tip: 'Free-form conversation' },
   summarize: { label: 'Summarize',  icon: '📋', tip: 'Structured summary of uploaded docs' },
   flashcard: { label: 'Flashcards', icon: '🃏', tip: 'Generate 5 Q&A flashcard pairs' },
+  exam:      { label: 'Exam',       icon: '🎓', tip: 'Take a graded exam with detailed results' },
 };
 
 const ROLE_OPTIONS = [
@@ -305,14 +309,15 @@ MessageBubble.displayName = 'MessageBubble';
 // ── Main Chat component ───────────────────────────────────────────────────────
 interface Props {
   sessionId: string;
-  onSessionReset: () => string;
+  onSessionReset:  () => string;
+  onSessionResume: (id: string) => void;
   activeProvider?: LLMProvider;
   onProviderSwitch?: (p: LLMProvider) => void;
-  onNavigateMedia?: (url: string) => void; // tells App to open MediaPlayer with this URL
-  onKbRefresh?: () => void;               // tells App to refresh KB status panel
+  onNavigateMedia?: (url: string) => void;
+  onKbRefresh?: () => void;
 }
 
-export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwitch, onNavigateMedia, onKbRefresh }) => {
+export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onSessionResume, onProviderSwitch, onNavigateMedia, onKbRefresh }) => {
   const [messages,      setMessages]      = useState<Message[]>([WELCOME]);
   const [input,         setInput]         = useState('');
   const [mode,          setMode]          = useState<TeachMode>('explain');
@@ -327,6 +332,8 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwi
   const [pendingImage,   setPendingImage]   = useState<ImageAttachment | null>(null);
   const [focusSourceId,  setFocusSourceId]  = useState<string | undefined>(undefined);
   const [focusSourceUrl, setFocusSourceUrl] = useState<string | undefined>(undefined);
+  const [showHistory,    setShowHistory]    = useState(false);
+  const [showCertPanel,  setShowCertPanel]  = useState(false);
 
   const bottomRef     = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -492,11 +499,12 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwi
           ));
         }
         if (event.done) {
+          const finalContent = event.cleanText ?? fullContent;
           setMessages(prev => prev.map(m =>
-            m.id === placeholder.id ? { ...m, streaming: false, sources } : m
+            m.id === placeholder.id ? { ...m, content: finalContent, streaming: false, sources } : m
           ));
-          setLastAnswer(fullContent);
-          speakText(fullContent);
+          setLastAnswer(finalContent);
+          speakText(finalContent);
           if (liveRegionRef.current) {
             liveRegionRef.current.textContent = `AI Tutor responded: ${fullContent.slice(0, 100)}`;
           }
@@ -657,6 +665,43 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwi
     lastUserTurnRef.current = null;
   };
 
+  const handleResumeSession = useCallback(async (meta: SessionMeta) => {
+    abortRef.current?.abort();
+    setShowHistory(false);
+    setError(null);
+    try {
+      const msgs = await getSessionMessages(meta.id);
+      const restored: Message[] = msgs.map(m => ({
+        id:        makeId(),
+        role:      m.role,
+        content:   m.content,
+        timestamp: new Date(),
+      }));
+      setMessages(restored.length > 0 ? restored : [{ ...WELCOME, id: makeId() }]);
+    } catch {
+      setMessages([{ ...WELCOME, id: makeId() }]);
+    }
+    setCurrentSessId(meta.id);
+    onSessionResume(meta.id);
+    setFocusSourceId(undefined);
+    setFocusSourceUrl(undefined);
+    lastUserTurnRef.current = null;
+  }, [onSessionResume]);
+
+  const handleCertAction = useCallback((cert: CertInfo, action: 'mock-exam' | 'coach' | 'study-plan') => {
+    setShowCertPanel(false);
+    setMode('exam');
+    const prompts: Record<typeof action, string> = {
+      'mock-exam':   `Start a full mock exam for ${cert.code} — ${cert.name}. Follow the exact ${cert.vendor} exam format with ${cert.questionCount} questions, ${cert.timeMinutes}-minute time limit, and ${cert.passingScore} passing score.`,
+      'coach':       `Coach me interactively for the ${cert.code} — ${cert.name} exam. Ask me one question at a time from each domain, give me feedback after each answer, and track my progress across all ${cert.domains.length} domains.`,
+      'study-plan':  `Generate a structured study plan for the ${cert.code} — ${cert.name} exam. Cover all domains with recommended resources, daily study schedule, and milestones to reach the passing score of ${cert.passingScore}.`,
+    };
+    const text = prompts[action];
+    const userMsg: Message = { id: makeId(), role: 'user', content: text, timestamp: new Date() };
+    setMessages(prev => cappedMessages(prev, userMsg));
+    void streamReply(text, 'exam', currentSessId, undefined, undefined, undefined, resolvedPersona);
+  }, [currentSessId, resolvedPersona, streamReply]);
+
   const handleStop = () => {
     abortRef.current?.abort();
     setIsLoading(false);
@@ -669,8 +714,26 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwi
   const lastAssistantIdx = messages.reduceRight((acc, m, i) => acc === -1 && m.role === 'assistant' ? i : acc, -1);
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <div className="relative flex flex-col h-full bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
       <div ref={liveRegionRef} aria-live="polite" aria-atomic="true" className="sr-only" />
+
+      {/* Certification prep overlay panel */}
+      {showCertPanel && (
+        <CertificationSelector
+          onStartExam={handleCertAction}
+          onClose={() => setShowCertPanel(false)}
+        />
+      )}
+
+      {/* Session history overlay panel */}
+      {showHistory && (
+        <SessionHistory
+          currentSessionId={currentSessId}
+          onResume={handleResumeSession}
+          onNewChat={() => { setShowHistory(false); handleClear(); }}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-blue-600 to-indigo-600">
@@ -717,6 +780,30 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onProviderSwi
               />
             )}
           </div>
+          {/* Certification prep */}
+          <button
+            onClick={() => { setShowCertPanel(v => !v); setShowHistory(false); }}
+            title="Certification Prep — mock exams for AZ-400, AWS SAA, Security+, CKAD and more"
+            aria-label="Certification prep"
+            aria-pressed={showCertPanel}
+            className={`rounded-lg p-1.5 transition-all ${showCertPanel ? 'bg-white text-indigo-700' : 'text-blue-100 hover:text-white hover:bg-white/20'}`}
+          >
+            <span className="text-sm leading-none">🏆</span>
+          </button>
+
+          {/* Session history */}
+          <button
+            onClick={() => { setShowHistory(v => !v); setShowCertPanel(false); }}
+            title="Session memory — view & resume past chats"
+            aria-label="Session history"
+            aria-pressed={showHistory}
+            className={`rounded-lg p-1.5 transition-all ${showHistory ? 'bg-white text-indigo-700' : 'text-blue-100 hover:text-white hover:bg-white/20'}`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
+            </svg>
+          </button>
+
           {/* Export chat as Markdown */}
           <button
             onClick={handleExport}
