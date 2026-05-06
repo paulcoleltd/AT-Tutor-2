@@ -3,6 +3,7 @@ import { callLLM, streamLLM, streamLLMWithImage, LLMError, Message, ImageData } 
 import { SessionStore } from '../sessions/sessionStore';
 import { MemoryManager } from '../memory/memoryManager';
 import { getDb } from '../db';
+import { detectCertInText, Certification } from '../data/certifications';
 
 export type TeachMode = 'explain' | 'quiz' | 'chat' | 'summarize' | 'flashcard' | 'exam';
 
@@ -128,7 +129,9 @@ export class TeacherAgent {
     const userPrompt    = buildPrompt(contextStr, instruction, userText, persona);
     const history       = this.sessions.getHistory(sessionId);
     const memoryBlock   = this.memory.buildMemoryBlock(sessionId);
-    const systemPrompt  = memoryBlock ? SYSTEM_PROMPT + memoryBlock : SYSTEM_PROMPT;
+    const cert          = mode === 'exam' ? detectCertInText(userText) : null;
+    const certBlock     = cert ? buildCertContext(cert) : '';
+    const systemPrompt  = SYSTEM_PROMPT + memoryBlock + certBlock;
 
     let raw: string;
     try {
@@ -172,7 +175,9 @@ export class TeacherAgent {
     const userPrompt    = buildPrompt(contextStr, instruction, userText, persona);
     const history       = this.sessions.getHistory(sessionId);
     const memoryBlock   = this.memory.buildMemoryBlock(sessionId);
-    const systemPrompt  = memoryBlock ? SYSTEM_PROMPT + memoryBlock : SYSTEM_PROMPT;
+    const cert          = mode === 'exam' ? detectCertInText(userText) : null;
+    const certBlock     = cert ? buildCertContext(cert) : '';
+    const systemPrompt  = SYSTEM_PROMPT + memoryBlock + certBlock;
 
     // Emit sources first so the client can show them immediately
     yield { sources };
@@ -211,6 +216,22 @@ export class TeacherAgent {
   resetSession(sessionId: string): void {
     this.sessions.clearSession(sessionId);
   }
+}
+
+function buildCertContext(cert: Certification): string {
+  const domains = cert.domains
+    .map(d => `  • ${d.name} — ${d.weight}%`)
+    .join('\n');
+  const qtypes = cert.questionTypes.map(q => `  • ${q}`).join('\n');
+  return (
+    `\n\nCERTIFICATION EXAM BLUEPRINT — use this to generate accurately targeted questions:\n` +
+    `Exam: ${cert.code} — ${cert.name}\n` +
+    `Vendor: ${cert.vendor} | Level: ${cert.level}\n` +
+    `Questions: ${cert.questionCount} | Time: ${cert.timeMinutes} min | Passing: ${cert.passingScore} (scale: ${cert.scoreScale})\n` +
+    `\nExam Domains & Weights:\n${domains}\n` +
+    `\nQuestion Types Used in This Exam:\n${qtypes}\n` +
+    `\nExam Style:\n${cert.examStyle}\n`
+  );
 }
 
 const EXAM_RESULT_RE = /\[EXAM_RESULT:([^\]]+)\]/i;

@@ -214,6 +214,25 @@ export interface ProgressData {
   topImprovements:  string[];
 }
 
+export interface CertDomain { name: string; weight: number; }
+export interface CertInfo {
+  code:          string;
+  name:          string;
+  vendor:        string;
+  category:      string;
+  level:         string;
+  questionCount: number;
+  timeMinutes:   number;
+  passingScore:  string;
+  domains:       CertDomain[];
+  studyTips:     string[];
+}
+
+export async function getCertifications(): Promise<CertInfo[]> {
+  const data = await handle<{ certifications: CertInfo[] }>(await fetch(`${BASE_URL}/certifications`));
+  return data.certifications;
+}
+
 export async function getProgress(): Promise<ProgressData> {
   return handle<ProgressData>(await fetch(`${BASE_URL}/progress`));
 }

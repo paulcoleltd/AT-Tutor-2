@@ -4,6 +4,8 @@ import remarkGfm from 'remark-gfm';
 import { streamMessage, clearHistory, speakWithAI, setProvider, uploadUrl, getSessionMessages, TeachMode, LLMProvider, ImageAttachment, SessionMeta } from '../lib/api';
 import { VoiceControls } from './VoiceControls';
 import { SessionHistory } from './SessionHistory';
+import { CertificationSelector } from './CertificationSelector';
+import type { CertInfo } from '../lib/api';
 
 // Detect "navigate to / go to / open / load / check / look at <URL>" patterns
 const NAV_PATTERN = /(?:navigate\s+to|go\s+to|open|load|check\s+out?|look\s+at|fetch|read|analyse|analyze|play|watch|listen\s+to)\s+(https?:\/\/[^\s]+)/i;
@@ -331,6 +333,7 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onSessionResu
   const [focusSourceId,  setFocusSourceId]  = useState<string | undefined>(undefined);
   const [focusSourceUrl, setFocusSourceUrl] = useState<string | undefined>(undefined);
   const [showHistory,    setShowHistory]    = useState(false);
+  const [showCertPanel,  setShowCertPanel]  = useState(false);
 
   const bottomRef     = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -685,6 +688,20 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onSessionResu
     lastUserTurnRef.current = null;
   }, [onSessionResume]);
 
+  const handleCertAction = useCallback((cert: CertInfo, action: 'mock-exam' | 'coach' | 'study-plan') => {
+    setShowCertPanel(false);
+    setMode('exam');
+    const prompts: Record<typeof action, string> = {
+      'mock-exam':   `Start a full mock exam for ${cert.code} — ${cert.name}. Follow the exact ${cert.vendor} exam format with ${cert.questionCount} questions, ${cert.timeMinutes}-minute time limit, and ${cert.passingScore} passing score.`,
+      'coach':       `Coach me interactively for the ${cert.code} — ${cert.name} exam. Ask me one question at a time from each domain, give me feedback after each answer, and track my progress across all ${cert.domains.length} domains.`,
+      'study-plan':  `Generate a structured study plan for the ${cert.code} — ${cert.name} exam. Cover all domains with recommended resources, daily study schedule, and milestones to reach the passing score of ${cert.passingScore}.`,
+    };
+    const text = prompts[action];
+    const userMsg: Message = { id: makeId(), role: 'user', content: text, timestamp: new Date() };
+    setMessages(prev => cappedMessages(prev, userMsg));
+    void streamReply(text, 'exam', currentSessId, undefined, undefined, undefined, resolvedPersona);
+  }, [currentSessId, resolvedPersona, streamReply]);
+
   const handleStop = () => {
     abortRef.current?.abort();
     setIsLoading(false);
@@ -699,6 +716,14 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onSessionResu
   return (
     <div className="relative flex flex-col h-full bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
       <div ref={liveRegionRef} aria-live="polite" aria-atomic="true" className="sr-only" />
+
+      {/* Certification prep overlay panel */}
+      {showCertPanel && (
+        <CertificationSelector
+          onStartExam={handleCertAction}
+          onClose={() => setShowCertPanel(false)}
+        />
+      )}
 
       {/* Session history overlay panel */}
       {showHistory && (
@@ -755,9 +780,20 @@ export const Chat: React.FC<Props> = ({ sessionId, onSessionReset, onSessionResu
               />
             )}
           </div>
+          {/* Certification prep */}
+          <button
+            onClick={() => { setShowCertPanel(v => !v); setShowHistory(false); }}
+            title="Certification Prep — mock exams for AZ-400, AWS SAA, Security+, CKAD and more"
+            aria-label="Certification prep"
+            aria-pressed={showCertPanel}
+            className={`rounded-lg p-1.5 transition-all ${showCertPanel ? 'bg-white text-indigo-700' : 'text-blue-100 hover:text-white hover:bg-white/20'}`}
+          >
+            <span className="text-sm leading-none">🏆</span>
+          </button>
+
           {/* Session history */}
           <button
-            onClick={() => setShowHistory(v => !v)}
+            onClick={() => { setShowHistory(v => !v); setShowCertPanel(false); }}
             title="Session memory — view & resume past chats"
             aria-label="Session history"
             aria-pressed={showHistory}
