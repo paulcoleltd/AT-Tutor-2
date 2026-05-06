@@ -18,9 +18,7 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        launchOptions: {
-          executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-        },
+        // No executablePath — let Playwright auto-detect the installed browser
       },
     },
   ],

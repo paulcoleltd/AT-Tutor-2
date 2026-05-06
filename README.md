@@ -2,6 +2,18 @@
 
 An enhanced AI Tutor built on RAG (Retrieval-Augmented Generation). Upload your documents, then chat, get explanations, take quizzes, generate summaries, or create flashcards — all powered by streaming AI responses.
 
+## What's New in v2.1
+
+| Feature | Status | Description |
+|---|---|---|
+| 💾 Chat persistence | ✅ New | Messages saved to `localStorage` keyed by session UUID — survives page refresh |
+| 📱 Mobile sidebar | ✅ New | Hamburger ☰ toggle in header opens sidebar as a full-height overlay with dark backdrop |
+| ⏳ Upload progress bar | ✅ New | Live `%` progress bar during file transfer (XHR), then pulsing indicator during AI processing |
+| 📋 Code block copy | ✅ New | Hover over any code block to reveal a **Copy** button; inline code styled distinctly |
+| ⚠️ KB reset warning | ✅ New | Amber banner when Vercel cold-start resets the in-memory vector store — prompts re-upload |
+| 🤖 Role-aware welcome | ✅ New | Each role (Tutor, Receptionist, Expert, etc.) shows a tailored welcome message on selection |
+| 🔄 Auto LLM per role | ✅ New | Switching roles auto-selects the best LLM (Claude → creative, GPT → analytical, Gemini → broad) |
+
 ## What's New in v2
 
 | Feature | v1 | v2 |
@@ -13,9 +25,12 @@ An enhanced AI Tutor built on RAG (Retrieval-Augmented Generation). Upload your 
 | Dark mode | ❌ | ✅ System-aware toggle |
 | Markdown rendering | ❌ | ✅ Full GFM markdown |
 | Delete documents | ❌ | ✅ Per-document removal |
-| File types | PDF, MD | **PDF, MD, TXT** |
+| File types | PDF, MD | **PDF, MD, TXT, DOCX, images, audio, video** |
 | Session history | Global | **Per-browser UUID session** |
 | Stop generation | ❌ | ✅ Abort mid-stream |
+| Voice input/output | ❌ | ✅ Mic dictation + TTS auto-read |
+| Image analysis | ❌ | ✅ Attach images for visual AI analysis |
+| Audio/video ingest | ❌ | ✅ Whisper transcription into knowledge base |
 
 ---
 

@@ -16,6 +16,7 @@ import { createTtsRouter } from './routes/tts';
 import { createSessionsRouter } from './routes/sessions';
 import { createProgressRouter } from './routes/progress';
 import { createCertificationsRouter } from './routes/certifications';
+import { createSearchRouter } from './routes/search';
 import { MemoryManager } from './memory/memoryManager';
 import { getDb } from './db';
 import { getAvailableProviders } from './models/llmRouter';
@@ -79,6 +80,7 @@ export function createApp() {
   app.use('/api/sessions', createSessionsRouter(sessions, memory));
   app.use('/api/progress', createProgressRouter());
   app.use('/api/certifications', createCertificationsRouter());
+  app.use('/api/search', createSearchRouter());
 
   app.get('/api/health', (_req, res) => {
     const kb = brain.getStatus();
