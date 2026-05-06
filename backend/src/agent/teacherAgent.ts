@@ -1,6 +1,8 @@
 import { Brain, RetrievalResult } from '../brain/brain';
 import { callLLM, streamLLM, streamLLMWithImage, LLMError, Message, ImageData } from '../models/llmRouter';
 import { SessionStore } from '../sessions/sessionStore';
+import { MemoryManager } from '../memory/memoryManager';
+import { getDb } from '../db';
 
 export type TeachMode = 'explain' | 'quiz' | 'chat' | 'summarize' | 'flashcard';
 
@@ -13,7 +15,10 @@ const MODE_INSTRUCTIONS: Record<TeachMode, string> = {
   explain:
     'Explain the concept clearly and concisely. Use simple language, concrete examples, and analogies. Format your response using Markdown (headings, bold, bullet lists where helpful). Check for understanding at the end.',
   quiz:
-    'Generate ONE focused quiz question based on the context. Present it clearly. After the user answers, give constructive Markdown-formatted feedback.',
+    'Generate ONE focused quiz question based on the context. Present it clearly. ' +
+    'After the user answers, give constructive Markdown-formatted feedback. ' +
+    'At the very end of your feedback (NOT of your question), append exactly one hidden outcome tag on its own line: [PASS] if the answer is correct or [FAIL] if incorrect. ' +
+    'Only include [PASS] or [FAIL] when you are evaluating an answer — never when posing the initial question.',
   chat:
     'Engage in a natural, friendly conversation. Be helpful, curious, and encouraging. Use Markdown where it improves clarity.',
   summarize:
@@ -73,6 +78,7 @@ export class TeacherAgent {
   constructor(
     private readonly brain:    Brain,
     private readonly sessions: SessionStore,
+    private readonly memory:   MemoryManager,
   ) {}
 
   async ask(userText: string, mode: TeachMode = 'explain', sessionId: string, persona?: string): Promise<TeachResponse> {
@@ -83,23 +89,33 @@ export class TeacherAgent {
       ? chunks.join('\n\n---\n\n')
       : '(No documents uploaded yet. Answer from general knowledge.)';
 
-    const instruction = MODE_INSTRUCTIONS[mode] ?? MODE_INSTRUCTIONS.explain;
-    const userPrompt  = buildPrompt(contextStr, instruction, userText, persona);
-    const history     = this.sessions.getHistory(sessionId);
+    const instruction   = MODE_INSTRUCTIONS[mode] ?? MODE_INSTRUCTIONS.explain;
+    const userPrompt    = buildPrompt(contextStr, instruction, userText, persona);
+    const history       = this.sessions.getHistory(sessionId);
+    const memoryBlock   = this.memory.buildMemoryBlock(sessionId);
+    const systemPrompt  = memoryBlock ? SYSTEM_PROMPT + memoryBlock : SYSTEM_PROMPT;
 
-    let answer: string;
+    let raw: string;
     try {
-      answer = await callLLM(SYSTEM_PROMPT, userPrompt, history);
+      raw = await callLLM(systemPrompt, userPrompt, history);
     } catch (err) {
       if (err instanceof LLMError) throw err;
       throw new Error(`Unexpected error in teacher agent: ${(err as Error).message}`);
     }
 
+    const { stripped: answer, outcome } = parseAndStripOutcome(raw);
+    recordMode(sessionId, mode);
+    if (mode === 'quiz' && outcome !== null) recordQuizResult(sessionId, outcome === 'correct');
+
     this.sessions.appendMessages(sessionId, userText, answer);
+    const msgCount = this.sessions.getSessionMessages(sessionId).length;
+    if (msgCount > 0 && msgCount % 16 === 0) {
+      void this.memory.generateSummary(sessionId);
+    }
     return { answer, sources };
   }
 
-  async *stream(userText: string, mode: TeachMode = 'explain', sessionId: string, imageData?: ImageData, focusSourceId?: string, persona?: string): AsyncGenerator<{ token?: string; sources?: string[]; done?: boolean }> {
+  async *stream(userText: string, mode: TeachMode = 'explain', sessionId: string, imageData?: ImageData, focusSourceId?: string, persona?: string): AsyncGenerator<{ token?: string; sources?: string[]; done?: boolean; cleanText?: string }> {
     if (!userText?.trim()) throw new Error('TeacherAgent.stream: userText must not be empty.');
 
     const { chunks, sources, focusSourceHit }: RetrievalResult = await this.brain.retrieve(userText, undefined, focusSourceId);
@@ -112,29 +128,66 @@ export class TeacherAgent {
       contextStr = chunks.join('\n\n---\n\n');
     }
 
-    const instruction = MODE_INSTRUCTIONS[mode] ?? MODE_INSTRUCTIONS.explain;
-    const userPrompt  = buildPrompt(contextStr, instruction, userText, persona);
-    const history     = this.sessions.getHistory(sessionId);
+    const instruction   = MODE_INSTRUCTIONS[mode] ?? MODE_INSTRUCTIONS.explain;
+    const userPrompt    = buildPrompt(contextStr, instruction, userText, persona);
+    const history       = this.sessions.getHistory(sessionId);
+    const memoryBlock   = this.memory.buildMemoryBlock(sessionId);
+    const systemPrompt  = memoryBlock ? SYSTEM_PROMPT + memoryBlock : SYSTEM_PROMPT;
 
     // Emit sources first so the client can show them immediately
     yield { sources };
 
     let fullAnswer = '';
     const generator = imageData
-      ? streamLLMWithImage(SYSTEM_PROMPT, userPrompt, history, imageData)
-      : streamLLM(SYSTEM_PROMPT, userPrompt, history);
+      ? streamLLMWithImage(systemPrompt, userPrompt, history, imageData)
+      : streamLLM(systemPrompt, userPrompt, history);
     for await (const token of generator) {
       fullAnswer += token;
       yield { token };
     }
 
-    this.sessions.appendMessages(sessionId, userText, fullAnswer);
-    yield { done: true };
+    const { stripped: cleanAnswer, outcome } = parseAndStripOutcome(fullAnswer);
+    recordMode(sessionId, mode);
+    if (mode === 'quiz' && outcome !== null) recordQuizResult(sessionId, outcome === 'correct');
+
+    // If the LLM included the outcome tag, re-emit corrected final token so the
+    // client receives the stripped text (the tag itself was never yielded as a
+    // discrete token, it arrives mid-stream, so we emit a replacement done event
+    // with the clean text so the client can overwrite the last message).
+    this.sessions.appendMessages(sessionId, userText, cleanAnswer);
+    const msgCount = this.sessions.getSessionMessages(sessionId).length;
+    if (msgCount > 0 && msgCount % 16 === 0) {
+      void this.memory.generateSummary(sessionId);
+    }
+    yield { done: true, cleanText: outcome !== null ? cleanAnswer : undefined };
   }
 
   resetSession(sessionId: string): void {
     this.sessions.clearSession(sessionId);
   }
+}
+
+const OUTCOME_PASS = /\[PASS\]/i;
+const OUTCOME_FAIL = /\[FAIL\]/i;
+
+function parseAndStripOutcome(text: string): { stripped: string; outcome: 'correct' | 'incorrect' | null } {
+  if (OUTCOME_PASS.test(text)) return { stripped: text.replace(/\[PASS\]/gi, '').trimEnd(), outcome: 'correct' };
+  if (OUTCOME_FAIL.test(text)) return { stripped: text.replace(/\[FAIL\]/gi, '').trimEnd(), outcome: 'incorrect' };
+  return { stripped: text, outcome: null };
+}
+
+function recordQuizResult(sessionId: string, isCorrect: boolean, topic?: string): void {
+  try {
+    getDb().prepare('INSERT INTO quiz_results (session_id, is_correct, topic, created_at) VALUES (?, ?, ?, ?)')
+      .run(sessionId, isCorrect ? 1 : 0, topic ?? null, Date.now());
+  } catch { /* non-fatal */ }
+}
+
+function recordMode(sessionId: string, mode: string): void {
+  try {
+    getDb().prepare('INSERT INTO session_modes (session_id, mode, created_at) VALUES (?, ?, ?)')
+      .run(sessionId, mode, Date.now());
+  } catch { /* non-fatal */ }
 }
 
 function buildPrompt(context: string, instruction: string, userText: string, persona?: string): string {

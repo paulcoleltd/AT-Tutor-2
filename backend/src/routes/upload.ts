@@ -188,6 +188,10 @@ export function createUploadRouter(store: VectorStore): Router {
   });
 
   // DELETE /api/upload/:sourceId
+  router.get('/sources', (_req: Request, res: Response): void => {
+    res.json({ sources: store.getSources() });
+  });
+
   router.delete('/:sourceId', (req: Request, res: Response): void => {
     const { sourceId } = req.params;
     const VALID_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
