@@ -4,7 +4,8 @@ import { FileUpload } from './components/FileUpload';
 import { KnowledgeBaseStatus } from './components/KnowledgeBaseStatus';
 import { ProviderSwitcher } from './components/ProviderSwitcher';
 import { MediaPlayer } from './components/MediaPlayer';
-import { LearningProgress } from './components/LearningProgress';
+import { ProgressDashboard } from './components/ProgressDashboard';
+import { useProgressTracker } from './hooks/useProgressTracker';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { UserProfile } from './components/UserProfile';
@@ -26,9 +27,10 @@ const App: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // ── New feature hooks ──────────────────────────────────────────────────────
-  const profileHook  = useUserProfile();
-  const memoryHook   = useSessionMemory();
-  const errorLogHook = useErrorLog();
+  const profileHook    = useUserProfile();
+  const memoryHook     = useSessionMemory();
+  const errorLogHook   = useErrorLog();
+  const progressHook   = useProgressTracker();
 
   // Callback from Chat to save a session snapshot when conversation has substance
   const handleSaveSnapshot = (snap: Omit<SessionSnapshot, 'topic'> & { messages: Array<{role: string; content: string}> }) => {
@@ -119,7 +121,7 @@ const App: React.FC = () => {
           {/* Upload */}
           <ErrorBoundary>
             <FileUpload
-              onUploaded={() => setKbRefreshKey(k => k + 1)}
+              onUploaded={() => { setKbRefreshKey(k => k + 1); progressHook.logDocUploaded(); }}
               onError={(msg) => errorLogHook.log('error', 'FileUpload', msg)}
             />
           </ErrorBoundary>
@@ -145,9 +147,14 @@ const App: React.FC = () => {
             />
           </ErrorBoundary>
 
-          {/* Provider switcher */}
+          {/* Progress Dashboard */}
           <ErrorBoundary>
-            <LearningProgress refreshKey={kbRefreshKey} />
+            <ProgressDashboard
+              progress={progressHook.progress}
+              topSubject={progressHook.topSubject}
+              studyDays={progressHook.studyDays}
+              onReset={progressHook.resetProgress}
+            />
           </ErrorBoundary>
 
           <ErrorBoundary>
@@ -224,6 +231,8 @@ const App: React.FC = () => {
               onLogError={(source, msg, detail) => errorLogHook.log('error', source, msg, detail)}
               onLogWarn={(source, msg) => errorLogHook.log('warn', source, msg)}
               onLogInfo={(source, msg) => errorLogHook.log('info', source, msg)}
+              onLogMessage={progressHook.logMessage}
+              onLogSession={progressHook.logSession}
             />
           </ErrorBoundary>
         </section>

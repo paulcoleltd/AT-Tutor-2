@@ -423,12 +423,16 @@ interface Props {
   onLogError?: (source: string, message: string, detail?: string) => void;
   onLogWarn?:  (source: string, message: string) => void;
   onLogInfo?:  (source: string, message: string) => void;
+  // Progress tracking
+  onLogMessage?: (mode: string, subject?: string) => void;
+  onLogSession?: (subject?: string) => void;
 }
 
 export const Chat: React.FC<Props> = ({
   sessionId, onSessionReset, onSessionResume, onProviderSwitch, onNavigateMedia, onKbRefresh,
   userProfile, onSaveSnapshot, buildResumeContext,
   onLogError, onLogWarn, onLogInfo,
+  onLogMessage, onLogSession,
 }) => {
   const [messages,      setMessages]      = useState<Message[]>(() => {
     const restored = restoreChat(sessionId);
@@ -824,7 +828,11 @@ export const Chat: React.FC<Props> = ({
       id: makeId(), role: 'user', content: trimmed,
       timestamp: new Date(), image: attachedImage ?? undefined,
     };
-    setMessages(prev => cappedMessages(prev, userMsg));
+    setMessages(prev => {
+      if (prev.filter(m => m.role === 'user').length === 0) onLogSession?.();
+      return cappedMessages(prev, userMsg);
+    });
+    onLogMessage?.(mode);
 
     await streamReply(trimmed, mode, currentSessId, attachedImage ?? undefined, undefined, focusSourceId, resolvedPersona);
   }, [input, isLoading, mode, currentSessId, pendingImage, streamReply, onProviderSwitch, resolvedPersona]);
