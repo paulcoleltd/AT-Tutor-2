@@ -89,7 +89,7 @@ const App: React.FC = () => {
             RAG + Streaming
           </span>
           <span className="hidden sm:inline-flex items-center gap-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2.5 py-1 rounded-full font-medium">
-            5 Modes
+            6 Modes
           </span>
           <ThemeToggle dark={dark} onToggle={toggle} />
         </div>
