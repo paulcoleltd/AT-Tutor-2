@@ -930,6 +930,7 @@ export const Chat: React.FC<Props> = ({
         <CertificationSelector
           onStartExam={handleCertAction}
           onClose={() => setShowCertPanel(false)}
+          onKbRefresh={onKbRefresh}
         />
       )}
 

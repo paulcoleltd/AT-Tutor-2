@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getCertifications, CertInfo } from '../lib/api';
+import { getCertifications, uploadUrl, CertInfo } from '../lib/api';
 
 const LEVEL_BADGE: Record<string, string> = {
   Foundational: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
@@ -22,17 +22,32 @@ const VENDOR_ICON: Record<string, string> = {
   'Linux Foundation':       '🐧',
 };
 
+type Tab = 'catalog' | 'url';
+
+interface CustomCourse {
+  url:   string;
+  label: string;
+}
+
 interface Props {
   onStartExam:    (cert: CertInfo, action: 'mock-exam' | 'coach' | 'study-plan') => void;
   onClose:        () => void;
+  onKbRefresh?:   () => void;
 }
 
-export const CertificationSelector: React.FC<Props> = ({ onStartExam, onClose }) => {
-  const [certs,     setCerts]     = useState<CertInfo[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [search,    setSearch]    = useState('');
-  const [category,  setCategory]  = useState('All');
-  const [selected,  setSelected]  = useState<CertInfo | null>(null);
+export const CertificationSelector: React.FC<Props> = ({ onStartExam, onClose, onKbRefresh }) => {
+  const [tab,        setTab]       = useState<Tab>('catalog');
+  const [certs,      setCerts]     = useState<CertInfo[]>([]);
+  const [loading,    setLoading]   = useState(true);
+  const [search,     setSearch]    = useState('');
+  const [category,   setCategory]  = useState('All');
+  const [selected,   setSelected]  = useState<CertInfo | null>(null);
+
+  // URL course loader state
+  const [courseUrl,   setCourseUrl]   = useState('');
+  const [urlLoading,  setUrlLoading]  = useState(false);
+  const [urlError,    setUrlError]    = useState<string | null>(null);
+  const [loadedCourse, setLoadedCourse] = useState<CustomCourse | null>(null);
 
   useEffect(() => {
     getCertifications()
@@ -53,6 +68,39 @@ export const CertificationSelector: React.FC<Props> = ({ onStartExam, onClose })
       (!q || c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || c.vendor.toLowerCase().includes(q)),
     );
   }, [certs, search, category]);
+
+  const handleLoadUrl = useCallback(async () => {
+    const trimmed = courseUrl.trim();
+    if (!trimmed) return;
+    setUrlError(null);
+    setUrlLoading(true);
+    try {
+      await uploadUrl(trimmed);
+      const label = new URL(trimmed).hostname.replace(/^www\./, '');
+      setLoadedCourse({ url: trimmed, label });
+      onKbRefresh?.();
+    } catch (e: any) {
+      setUrlError(e.message ?? 'Failed to load URL');
+    } finally {
+      setUrlLoading(false);
+    }
+  }, [courseUrl, onKbRefresh]);
+
+  // Build a minimal CertInfo stub so custom courses can reuse the exam/coach flow
+  function customCertStub(course: CustomCourse): CertInfo {
+    return {
+      code:          'CUSTOM',
+      name:          course.label,
+      vendor:        course.url,
+      level:         'Associate',
+      category:      'Custom',
+      questionCount: 10,
+      timeMinutes:   30,
+      passingScore:  '70%',
+      domains:       [{ name: 'Course content', weight: 100 }],
+      studyTips:     [course.url],
+    };
+  }
 
   if (selected) {
     return (
@@ -168,74 +216,194 @@ export const CertificationSelector: React.FC<Props> = ({ onStartExam, onClose })
         </button>
       </div>
 
-      {/* Search + filter */}
-      <div className="px-3 pt-3 pb-2 space-y-2">
-        <input
-          type="search"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search by code or name (e.g. AZ-400, Security+)…"
-          className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-        />
-        <div className="flex gap-1.5 flex-wrap">
-          {categories.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setCategory(cat)}
-              className={`text-[10px] px-2 py-1 rounded-full font-medium transition-colors ${
-                category === cat
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* List */}
-      <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1.5">
-        {loading && (
-          <div className="flex items-center justify-center py-8 text-sm text-slate-400">
-            <svg className="animate-spin w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-            </svg>
-            Loading certifications…
-          </div>
-        )}
-        {!loading && filtered.length === 0 && (
-          <p className="text-center text-sm text-slate-400 py-8">No certifications match your search.</p>
-        )}
-        {!loading && filtered.map(cert => (
+      {/* Tab strip */}
+      <div className="flex border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
+        {([['catalog', '📋 Catalog'], ['url', '🔗 Load from URL']] as const).map(([t, label]) => (
           <button
-            key={cert.code}
-            onClick={() => setSelected(cert)}
-            className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-300 dark:hover:border-indigo-600 px-3 py-2.5 transition-all group"
+            key={t}
+            onClick={() => setTab(t)}
+            className={`flex-1 py-2 text-xs font-semibold transition-colors ${
+              tab === t
+                ? 'text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-500 bg-white dark:bg-slate-800'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+            }`}
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-base flex-shrink-0">{VENDOR_ICON[cert.vendor] ?? '📄'}</span>
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
-                    {cert.code}
-                  </p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{cert.name}</p>
-                </div>
-              </div>
-              <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${LEVEL_BADGE[cert.level] ?? ''}`}>{cert.level}</span>
-                <span className="text-[10px] text-slate-400">{cert.questionCount}Q · {cert.timeMinutes}m</span>
-              </div>
-            </div>
+            {label}
           </button>
         ))}
       </div>
 
-      <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-700 text-[10px] text-slate-400 text-center">
-        {certs.length} certifications available · Select one to start mock exam or coaching
-      </div>
+      {/* ── URL LOADER TAB ─────────────────────────────────────────────────── */}
+      {tab === 'url' && (
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Paste any course URL — YouTube lecture, Microsoft Learn module, Udemy, Coursera, blog post, or documentation page — and the AI will study it with you.
+          </p>
+
+          <div className="space-y-2">
+            <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Course URL</label>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={courseUrl}
+                onChange={e => { setCourseUrl(e.target.value); setUrlError(null); setLoadedCourse(null); }}
+                onKeyDown={e => e.key === 'Enter' && !urlLoading && handleLoadUrl()}
+                placeholder="https://learn.microsoft.com/en-us/training/…"
+                className="flex-1 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <button
+                onClick={handleLoadUrl}
+                disabled={!courseUrl.trim() || urlLoading}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold transition-colors flex-shrink-0"
+              >
+                {urlLoading ? (
+                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                  </svg>
+                ) : 'Load'}
+              </button>
+            </div>
+            {urlError && (
+              <p className="text-xs text-red-500 dark:text-red-400 flex items-center gap-1">
+                <span>⚠️</span> {urlError}
+              </p>
+            )}
+          </div>
+
+          {/* Quick-pick popular course sites */}
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Popular sources</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                { icon: '🪟', name: 'Microsoft Learn',  url: 'https://learn.microsoft.com/en-us/training/browse/' },
+                { icon: '🟠', name: 'AWS Skill Builder', url: 'https://skillbuilder.aws/' },
+                { icon: '🔵', name: 'Google Cloud',     url: 'https://cloud.google.com/learn/training' },
+                { icon: '🛡️', name: 'CompTIA CertMaster', url: 'https://www.comptia.org/training/certmaster-learn' },
+                { icon: '▶️', name: 'YouTube',          url: 'https://www.youtube.com' },
+                { icon: '📚', name: 'Coursera',         url: 'https://www.coursera.org' },
+              ].map(s => (
+                <button
+                  key={s.name}
+                  onClick={() => { setCourseUrl(s.url); setUrlError(null); setLoadedCourse(null); }}
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-2 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors text-left"
+                >
+                  <span>{s.icon}</span>
+                  <span className="truncate">{s.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Success state */}
+          {loadedCourse && (
+            <div className="rounded-xl border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900/20 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-green-500 text-lg">✅</span>
+                <div>
+                  <p className="text-sm font-semibold text-green-800 dark:text-green-300">Course loaded!</p>
+                  <p className="text-[11px] text-green-600 dark:text-green-400 truncate">{loadedCourse.url}</p>
+                </div>
+              </div>
+              <p className="text-xs text-green-700 dark:text-green-300">
+                The AI has read this course. Choose how you want to study it:
+              </p>
+              <div className="space-y-2">
+                <button
+                  onClick={() => onStartExam(customCertStub(loadedCourse), 'mock-exam')}
+                  className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors"
+                >
+                  🎓 Quiz me on this course
+                </button>
+                <button
+                  onClick={() => onStartExam(customCertStub(loadedCourse), 'coach')}
+                  className="w-full py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs font-medium transition-colors border border-blue-200 dark:border-blue-700"
+                >
+                  💬 Coach me through it
+                </button>
+                <button
+                  onClick={() => onStartExam(customCertStub(loadedCourse), 'study-plan')}
+                  className="w-full py-2 rounded-xl bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-medium transition-colors border border-slate-200 dark:border-slate-600"
+                >
+                  📋 Generate study plan from this course
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── CATALOG TAB ───────────────────────────────────────────────────── */}
+      {tab === 'catalog' && <>
+        {/* Search + filter */}
+        <div className="px-3 pt-3 pb-2 space-y-2">
+          <input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by code or name (e.g. AZ-400, Security+)…"
+            className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+          <div className="flex gap-1.5 flex-wrap">
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setCategory(cat)}
+                className={`text-[10px] px-2 py-1 rounded-full font-medium transition-colors ${
+                  category === cat
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1.5">
+          {loading && (
+            <div className="flex items-center justify-center py-8 text-sm text-slate-400">
+              <svg className="animate-spin w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+              Loading certifications…
+            </div>
+          )}
+          {!loading && filtered.length === 0 && (
+            <p className="text-center text-sm text-slate-400 py-8">No certifications match your search.</p>
+          )}
+          {!loading && filtered.map(cert => (
+            <button
+              key={cert.code}
+              onClick={() => setSelected(cert)}
+              className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-300 dark:hover:border-indigo-600 px-3 py-2.5 transition-all group"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-base flex-shrink-0">{VENDOR_ICON[cert.vendor] ?? '📄'}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
+                      {cert.code}
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{cert.name}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${LEVEL_BADGE[cert.level] ?? ''}`}>{cert.level}</span>
+                  <span className="text-[10px] text-slate-400">{cert.questionCount}Q · {cert.timeMinutes}m</span>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-700 text-[10px] text-slate-400 text-center">
+          {certs.length} certifications available · Select one to start mock exam or coaching
+        </div>
+      </>}
     </div>
   );
 };
