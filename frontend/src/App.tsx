@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Chat } from './components/Chat';
 import { FileUpload } from './components/FileUpload';
 import { KnowledgeBaseStatus } from './components/KnowledgeBaseStatus';
 import { ProviderSwitcher } from './components/ProviderSwitcher';
 import { MediaPlayer } from './components/MediaPlayer';
 import { ProgressDashboard } from './components/ProgressDashboard';
+import { LearningRoadmap } from './components/LearningRoadmap';
+import { SetupGuide } from './components/SetupGuide';
 import { useProgressTracker } from './hooks/useProgressTracker';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -16,15 +18,24 @@ import { useSession } from './hooks/useSession';
 import { useUserProfile } from './hooks/useUserProfile';
 import { useSessionMemory, SessionSnapshot, deriveTopic } from './hooks/useSessionMemory';
 import { useErrorLog } from './hooks/useErrorLog';
-import { LLMProvider } from './lib/api';
+import { getHealth, LLMProvider } from './lib/api';
 
 const App: React.FC = () => {
   const { dark, toggle } = useDarkMode();
   const { sessionId, resetSession, resumeSession } = useSession();
   const [kbRefreshKey, setKbRefreshKey] = useState(0);
   const [activeProvider, setActiveProvider] = useState<LLMProvider>('claude');
-  const [mediaUrl, setMediaUrl]   = useState<string | undefined>(undefined);
+  const [mediaUrl, setMediaUrl]       = useState<string | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showSetup, setShowSetup]     = useState(false);
+
+  // Show setup guide if backend is unreachable on first load
+  useEffect(() => {
+    if (window.location.hostname === 'localhost') return;
+    const dismissed = sessionStorage.getItem('setup-dismissed');
+    if (dismissed) return;
+    getHealth().catch(() => setShowSetup(true));
+  }, []);
 
   // ── New feature hooks ──────────────────────────────────────────────────────
   const profileHook    = useUserProfile();
@@ -48,6 +59,9 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 to-blue-50 dark:from-slate-900 dark:to-slate-800 flex flex-col transition-colors duration-200">
+      {showSetup && (
+        <SetupGuide onDismiss={() => { setShowSetup(false); sessionStorage.setItem('setup-dismissed', '1'); }} />
+      )}
       {/* Header */}
       <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 sm:px-6 py-3 flex items-center gap-3 shadow-sm">
 
@@ -147,6 +161,11 @@ const App: React.FC = () => {
             />
           </ErrorBoundary>
 
+          {/* Learning Roadmap */}
+          <ErrorBoundary>
+            <LearningRoadmap />
+          </ErrorBoundary>
+
           {/* Progress Dashboard */}
           <ErrorBoundary>
             <ProgressDashboard
@@ -207,10 +226,17 @@ const App: React.FC = () => {
               ⚙️ Configuration
             </h2>
             <p className="text-xs text-amber-600 dark:text-amber-500">
-              Set API keys in{' '}
-              <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">backend/.env</code>.
-              Supports OpenAI, Claude (default), and Gemini.
+              Local: set keys in <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">backend/.env</code>.{' '}
+              Vercel: add <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">ANTHROPIC_API_KEY</code> under Project → Settings → Environment Variables.
             </p>
+            {window.location.hostname !== 'localhost' && (
+              <button
+                onClick={() => setShowSetup(true)}
+                className="mt-2 text-[10px] text-amber-700 dark:text-amber-400 underline hover:no-underline"
+              >
+                View setup guide →
+              </button>
+            )}
           </div>
         </aside>
 
