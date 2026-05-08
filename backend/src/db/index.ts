@@ -1,11 +1,14 @@
 import path from 'path';
 import fs   from 'fs';
-import type BetterSqlite3 from 'better-sqlite3';
+// Minimal structural type for better-sqlite3 — avoids a hard @types dep
+// while still giving us useful autocomplete on the parts we actually use.
+interface SqliteStatement { run(...args: unknown[]): { changes: number; lastInsertRowid: number }; get(...args: unknown[]): unknown; all(...args: unknown[]): unknown[]; }
+interface SqliteDb { prepare(sql: string): SqliteStatement; pragma(s: string): unknown; exec(s: string): void; close(): void; transaction(fn: (...a: unknown[]) => unknown): (...a: unknown[]) => unknown; }
 
 // Dynamic require so a missing/incompatible native binary doesn't crash the
 // entire serverless function. Falls back to a no-op stub.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let DatabaseCtor: (new (...args: any[]) => BetterSqlite3.Database) | null = null;
+let DatabaseCtor: (new (...args: any[]) => SqliteDb) | null = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const mod = require('better-sqlite3');
@@ -78,11 +81,11 @@ const NOOP_DB = {
   exec:    () => undefined,
   close:   () => undefined,
   transaction: (fn: (...args: unknown[]) => unknown) => fn,
-} as unknown as BetterSqlite3.Database;
+} as unknown as SqliteDb;
 
-let _db: BetterSqlite3.Database | null = null;
+let _db: SqliteDb | null = null;
 
-export function getDb(): BetterSqlite3.Database {
+export function getDb(): SqliteDb {
   if (_db) return _db;
 
   if (!DatabaseCtor) {

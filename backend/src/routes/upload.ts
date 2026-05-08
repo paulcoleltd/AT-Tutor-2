@@ -1,6 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
-import { PDFParse } from 'pdf-parse';
+// pdf-parse v2 ships no usable TS types; require+cast is the safe path.
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+const PDFParse = require('pdf-parse') as new (opts: { data: Uint8Array }) => { getText(): Promise<{ text: string }> };
 import mammoth from 'mammoth';
 import { v4 as uuidv4 } from 'uuid';
 import OpenAI from 'openai';
