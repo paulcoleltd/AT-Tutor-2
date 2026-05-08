@@ -132,7 +132,7 @@ async function callClaude(system: string, user: string, history: Message[]): Pro
     ...history.filter(m => m.role !== 'system').map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     { role: 'user' as const, content: user },
   ];
-  const res = await getAnthropic().messages.create({ model: 'claude-sonnet-4-6', system, messages, max_tokens: 2048, temperature: 0.7 });
+  const res = await getAnthropic().messages.create({ model: CONFIG.claudeModel, system, messages, max_tokens: 2048, temperature: 0.7 });
   const block = res.content[0];
   if (!block || block.type !== 'text') throw new LLMError('Empty response from Claude', 'claude');
   return block.text;
@@ -143,7 +143,7 @@ async function* streamClaude(system: string, user: string, history: Message[]): 
     ...history.filter(m => m.role !== 'system').map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     { role: 'user' as const, content: user },
   ];
-  const stream = await getAnthropic().messages.stream({ model: 'claude-sonnet-4-6', system, messages, max_tokens: 2048, temperature: 0.7 });
+  const stream = await getAnthropic().messages.stream({ model: CONFIG.claudeModel, system, messages, max_tokens: 2048, temperature: 0.7 });
   for await (const chunk of stream) {
     if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
       yield chunk.delta.text;
@@ -192,7 +192,7 @@ export async function describeImageWithLLM(imageData: ImageData, prompt: string)
       if (CONFIG.claudeApiKey) {
         const ant = getAnthropic();
         const res = await ant.messages.create({
-          model: 'claude-sonnet-4-6',
+          model: CONFIG.claudeModel,
           max_tokens: 1024,
           messages: [{
             role: 'user',
@@ -242,7 +242,7 @@ export async function* streamLLMWithImage(
         ],
       },
     ];
-    const stream = await getAnthropic().messages.stream({ model: 'claude-sonnet-4-6', system, messages, max_tokens: 2048, temperature: 0.7 });
+    const stream = await getAnthropic().messages.stream({ model: CONFIG.claudeModel, system, messages, max_tokens: 2048, temperature: 0.7 });
     for await (const chunk of stream) {
       if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') yield chunk.delta.text;
     }

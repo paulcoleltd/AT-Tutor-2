@@ -109,10 +109,11 @@ export function createChatRouter(agent: TeacherAgent): Router {
           res.write(`data: ${JSON.stringify(event)}\n\n`);
         }
       } catch (err) {
-        if (err instanceof LLMError) console.error(`[chat] LLM stream error (${err.provider}):`, err.message);
-        else console.error('[chat] Unexpected stream error:', err);
+        const detail = (err as Error)?.message ?? String(err);
+        if (err instanceof LLMError) console.error(`[chat] LLM stream error (${err.provider}): ${detail}`);
+        else console.error('[chat] Unexpected stream error:', detail);
         const errMsg = err instanceof LLMError
-          ? 'AI service unavailable. Please try again later.'
+          ? `AI service unavailable. Please try again later. (${detail})`
           : 'An unexpected error occurred.';
         res.write(`data: ${JSON.stringify({ error: errMsg })}\n\n`);
       } finally {
