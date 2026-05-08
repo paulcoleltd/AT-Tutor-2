@@ -94,6 +94,7 @@ export class SessionStore {
   }
 
   get activeCount(): number {
-    return (getDb().prepare('SELECT COUNT(*) AS c FROM sessions').get() as { c: number }).c;
+    const row = getDb().prepare('SELECT COUNT(*) AS c FROM sessions').get() as { c: number } | undefined;
+    return row?.c ?? 0;
   }
 }
