@@ -43,6 +43,7 @@ export function createApp() {
   validateConfig();
 
   const app = express();
+  app.set('trust proxy', 1); // Vercel / reverse-proxy: trust X-Forwarded-For
   app.disable('x-powered-by');
   app.use(helmet());
 
@@ -85,7 +86,7 @@ export function createApp() {
   app.get('/api/health', (_req, res) => {
     const kb = brain.getStatus();
     const keysConfigured = {
-      claude: !!process.env.CLAUDE_API_KEY,
+      claude: !!(process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY),
       openai: !!process.env.OPENAI_API_KEY,
       gemini: !!process.env.GEMINI_API_KEY,
     };
