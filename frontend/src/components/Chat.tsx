@@ -1067,9 +1067,17 @@ export const Chat: React.FC<Props> = ({
 
       {/* Error banner */}
       {error && (
-        <div role="alert" className="bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 px-4 py-2 text-xs text-red-600 dark:text-red-400 flex items-center gap-2">
-          <span>⚠️ {error}</span>
-          <button onClick={() => setError(null)} className="ml-auto" aria-label="Dismiss">✕</button>
+        <div role="alert" className="bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 px-4 py-2.5 text-xs text-red-600 dark:text-red-400 flex items-start gap-2">
+          <span className="flex-shrink-0 mt-0.5">⚠️</span>
+          <div className="flex-1 min-w-0">
+            <span>{error}</span>
+            {(error.includes('unavailable') || error.includes('service')) && (
+              <p className="mt-1 text-red-500 dark:text-red-500 opacity-80">
+                Add <code className="bg-red-100 dark:bg-red-900/40 px-1 rounded font-mono">ANTHROPIC_API_KEY</code> to your Vercel environment variables, then redeploy.
+              </p>
+            )}
+          </div>
+          <button onClick={() => setError(null)} className="flex-shrink-0 mt-0.5" aria-label="Dismiss">✕</button>
         </div>
       )}
 

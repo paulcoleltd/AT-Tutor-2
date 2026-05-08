@@ -17,7 +17,8 @@ export const CONFIG = {
   port:               parseInt(process.env.PORT || '4000', 10),
   provider:           requireProvider(process.env.LLM_PROVIDER),
   openaiApiKey:       process.env.OPENAI_API_KEY  || '',
-  claudeApiKey:       process.env.CLAUDE_API_KEY  || '',
+  // Accept both ANTHROPIC_API_KEY (SDK standard) and CLAUDE_API_KEY (legacy)
+  claudeApiKey:       process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '',
   geminiApiKey:       process.env.GEMINI_API_KEY  || '',
   maxFileSizeMb:      parseInt(process.env.MAX_FILE_SIZE_MB      || '20',    10),
   rateLimitWindowMs:  parseInt(process.env.RATE_LIMIT_WINDOW_MS  || '60000', 10),
@@ -30,12 +31,13 @@ export function validateConfig(): void {
   if (noKeys) {
     console.error(
       '\n[config] *** NO API KEYS FOUND ***\n' +
-      '  Set at least one of: CLAUDE_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY\n' +
+      '  Set at least one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY\n' +
+      '  (CLAUDE_API_KEY is also accepted as an alias for ANTHROPIC_API_KEY)\n' +
       '  Chat requests will fail until a key is added.\n'
     );
   } else {
     if (CONFIG.provider === 'claude' && !CONFIG.claudeApiKey)
-      console.warn('[config] WARNING: CLAUDE_API_KEY is missing but LLM_PROVIDER=claude.');
+      console.warn('[config] WARNING: ANTHROPIC_API_KEY (or CLAUDE_API_KEY) is missing but LLM_PROVIDER=claude.');
     if (CONFIG.provider === 'gemini' && !CONFIG.geminiApiKey)
       console.warn('[config] WARNING: GEMINI_API_KEY is missing but LLM_PROVIDER=gemini.');
     if (CONFIG.provider === 'openai' && !CONFIG.openaiApiKey)

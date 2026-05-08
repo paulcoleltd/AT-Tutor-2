@@ -153,10 +153,11 @@ export const KnowledgeBaseStatus: React.FC<Props> = ({ refreshKey }) => {
         <div className="mt-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
           <p className="font-semibold">No API key configured</p>
           <p className="mt-0.5 text-amber-600 dark:text-amber-500">
-            Add <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">ANTHROPIC_API_KEY</code>,{' '}
+            Add <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">ANTHROPIC_API_KEY</code>{' '}
+            (or <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">CLAUDE_API_KEY</code>),{' '}
             <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">OPENAI_API_KEY</code>, or{' '}
             <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">GEMINI_API_KEY</code>{' '}
-            to your deployment environment variables.
+            to your Vercel environment variables.
           </p>
         </div>
       )}
