@@ -24,26 +24,15 @@ const MODE_LABELS: Record<string, string> = {
 
 function DonutChart({ progress }: { progress: LearningProgress }) {
   const slices = useMemo(() => {
-    const raw = [
-      { key: 'explain',   val: Math.max(0, progress.totalMessages - progress.totalQuizzes - progress.totalFlashcards - progress.totalSummarisations - progress.totalExplains) },
-      { key: 'explain',   val: progress.totalExplains },
-      { key: 'quiz',      val: progress.totalQuizzes },
-      { key: 'flashcard', val: progress.totalFlashcards },
-      { key: 'summarize', val: progress.totalSummarisations },
-      { key: 'exam',      val: progress.totalExplains },   // approximation
-      { key: 'chat',      val: Math.max(0, progress.totalMessages - progress.totalQuizzes - progress.totalFlashcards - progress.totalSummarisations - progress.totalExplains * 2) },
-    ].reduce<Record<string, number>>((acc, { key, val }) => {
-      acc[key] = (acc[key] ?? 0) + val;
-      return acc;
-    }, {});
-
+    const tracked = progress.totalQuizzes + progress.totalFlashcards +
+                    progress.totalSummarisations + progress.totalExplains + (progress.totalExams ?? 0);
     const modes = [
       { key: 'explain',   val: progress.totalExplains },
       { key: 'quiz',      val: progress.totalQuizzes },
       { key: 'flashcard', val: progress.totalFlashcards },
       { key: 'summarize', val: progress.totalSummarisations },
-      { key: 'exam',      val: 0 },
-      { key: 'chat',      val: Math.max(0, progress.totalMessages - progress.totalQuizzes - progress.totalFlashcards - progress.totalSummarisations - progress.totalExplains) },
+      { key: 'exam',      val: progress.totalExams ?? 0 },
+      { key: 'chat',      val: Math.max(0, progress.totalMessages - tracked) },
     ];
     const total = modes.reduce((s, m) => s + m.val, 0);
     if (total === 0) return [];
@@ -215,10 +204,11 @@ export const ProgressDashboard: React.FC<Props> = ({ progress, topSubject, study
   const statCards = [
     { icon: '💬', label: 'Messages',   value: progress.totalMessages,    color: 'indigo' },
     { icon: '🎯', label: 'Sessions',   value: progress.totalSessions,    color: 'blue'   },
-    { icon: '📝', label: 'Quizzes',    value: progress.totalQuizzes,     color: 'amber'  },
-    { icon: '🃏', label: 'Flashcards', value: progress.totalFlashcards,  color: 'pink'   },
-    { icon: '📁', label: 'Docs',       value: progress.docsUploaded,     color: 'teal'   },
-    { icon: '📅', label: 'Study days', value: studyDays,                 color: 'green'  },
+    { icon: '📝', label: 'Quizzes',    value: progress.totalQuizzes,       color: 'amber'  },
+    { icon: '🃏', label: 'Flashcards', value: progress.totalFlashcards,    color: 'pink'   },
+    { icon: '🎓', label: 'Exams',      value: progress.totalExams ?? 0,    color: 'purple' },
+    { icon: '📁', label: 'Docs',       value: progress.docsUploaded,       color: 'teal'   },
+    { icon: '📅', label: 'Study days', value: studyDays,                   color: 'green'  },
   ];
 
   const colorMap: Record<string, string> = {
@@ -226,6 +216,7 @@ export const ProgressDashboard: React.FC<Props> = ({ progress, topSubject, study
     blue:   'bg-blue-50   dark:bg-blue-900/20   text-blue-600   dark:text-blue-400',
     amber:  'bg-amber-50  dark:bg-amber-900/20  text-amber-600  dark:text-amber-400',
     pink:   'bg-pink-50   dark:bg-pink-900/20   text-pink-600   dark:text-pink-400',
+    purple: 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
     teal:   'bg-teal-50   dark:bg-teal-900/20   text-teal-600   dark:text-teal-400',
     green:  'bg-green-50  dark:bg-green-900/20  text-green-600  dark:text-green-400',
   };

@@ -32,6 +32,7 @@ export interface LearningProgress {
   totalFlashcards:   number;
   totalSummarisations: number;
   totalExplains:     number;
+  totalExams:        number;
   docsUploaded:      number;
   streakDays:        number;
   lastStudied:       string;
@@ -50,6 +51,7 @@ const EMPTY_PROGRESS: LearningProgress = {
   totalFlashcards:     0,
   totalSummarisations: 0,
   totalExplains:       0,
+  totalExams:          0,
   docsUploaded:        0,
   streakDays:          0,
   lastStudied:         '',
@@ -133,6 +135,7 @@ export function useProgressTracker() {
       if (mode === 'flashcard') next = { ...next, totalFlashcards:    next.totalFlashcards    + 1 };
       if (mode === 'summarize') next = { ...next, totalSummarisations: next.totalSummarisations + 1 };
       if (mode === 'explain')   next = { ...next, totalExplains:      next.totalExplains      + 1 };
+      if (mode === 'exam')      next = { ...next, totalExams:         next.totalExams         + 1 };
       if (subject) {
         if (mode === 'quiz')      next = updateSubject(next, subject, 'quizzesTaken');
         if (mode === 'flashcard') next = updateSubject(next, subject, 'flashcardSets');
