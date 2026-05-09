@@ -12,6 +12,7 @@ interface Props {
   examText:  string;
   onSubmit:  (formatted: string) => void;
   disabled?: boolean;
+  onDismiss?: () => void;
 }
 
 function countQuestions(text: string): number {
@@ -28,7 +29,7 @@ function buildTemplate(n: number): string {
   return Array.from({ length: n }, (_, i) => `Q${i + 1}: `).join('\n');
 }
 
-export const ExamAnswerPad: React.FC<Props> = ({ examText, onSubmit, disabled }) => {
+export const ExamAnswerPad: React.FC<Props> = ({ examText, onSubmit, disabled, onDismiss }) => {
   const total      = useMemo(() => countQuestions(examText), [examText]);
   const [text, setText]           = useState(() => buildTemplate(total > 0 ? total : 1));
   const [submitted, setSubmitted] = useState(false);
@@ -75,11 +76,25 @@ export const ExamAnswerPad: React.FC<Props> = ({ examText, onSubmit, disabled })
             <p className="text-indigo-200 text-xs">{total} questions · type your answer after each Q#:</p>
           </div>
         </div>
-        <div className="text-right flex-shrink-0">
-          <p className="text-white text-xs font-semibold">{answered}/{total} answered</p>
-          <div className="mt-1 h-1.5 w-24 bg-indigo-800 rounded-full overflow-hidden">
-            <div className="h-full bg-white rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="text-right">
+            <p className="text-white text-xs font-semibold">{answered}/{total} answered</p>
+            <div className="mt-1 h-1.5 w-24 bg-indigo-800 rounded-full overflow-hidden">
+              <div className="h-full bg-white rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+            </div>
           </div>
+          {onDismiss && !submitted && (
+            <button
+              onClick={onDismiss}
+              title="Dismiss answer pad"
+              className="text-indigo-200 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors flex-shrink-0"
+              aria-label="Close answer pad"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/>
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 

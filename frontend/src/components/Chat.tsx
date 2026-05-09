@@ -454,6 +454,7 @@ export const Chat: React.FC<Props> = ({
   const [focusSourceUrl, setFocusSourceUrl] = useState<string | undefined>(undefined);
   const [showHistory,    setShowHistory]    = useState(false);
   const [showCertPanel,  setShowCertPanel]  = useState(false);
+  const [dismissedPads,  setDismissedPads]  = useState<Set<string>>(new Set());
 
   const prevPersonaRef = useRef<RoleOption | null>(null);
 
@@ -1141,13 +1142,14 @@ export const Chat: React.FC<Props> = ({
                 onDelete={handleDeleteMessage}
                 onRegenerate={handleRegenerate}
               />
-              {isLastExamPaper && (
+              {isLastExamPaper && !dismissedPads.has(msg.id) && (
                 <ExamAnswerPad
                   examText={msg.content}
                   disabled={isLoading}
+                  onDismiss={() => setDismissedPads(prev => new Set([...prev, msg.id]))}
                   onSubmit={formatted => {
                     pendingExamSubmit.current = formatted;
-                    setInput(formatted); // useEffect triggers handleSend once state settles
+                    setInput(formatted);
                   }}
                 />
               )}
