@@ -294,6 +294,7 @@ export const LearningRoadmap: React.FC = () => {
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [progress,        setProgress]        = useState<ProgressMap>(loadProgress);
   const [langFilter,      setLangFilter]      = useState('All');
+  const [hiddenSubjects,  setHiddenSubjects]  = useState<Set<string>>(new Set());
 
   const roadmap = useMemo<SubjectRoadmap | null>(
     () => selectedSubject ? (ROADMAPS.find(r => r.subject === selectedSubject) ?? null) : null,
@@ -397,26 +398,47 @@ export const LearningRoadmap: React.FC = () => {
           {/* Overview grid — shown when no subject is selected (after Clear) */}
           {!roadmap && (
             <div className="px-4 pb-4">
-              <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">Select a subject above to view its roadmap.</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs text-slate-400 dark:text-slate-500">Select a subject to view its roadmap.</p>
+                {hiddenSubjects.size > 0 && (
+                  <button
+                    onClick={() => setHiddenSubjects(new Set())}
+                    className="text-[10px] text-indigo-500 dark:text-indigo-400 hover:underline"
+                  >
+                    Show all ({hiddenSubjects.size} hidden)
+                  </button>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-2">
-                {ROADMAPS.map(r => {
-                  const sub = progress[r.subject] ?? {};
+                {ROADMAPS.filter(r => !hiddenSubjects.has(r.subject)).map(r => {
+                  const sub  = progress[r.subject] ?? {};
                   const done = r.steps.filter(st => sub[st.level] === 'done').length;
                   return (
-                    <button
-                      key={r.subject}
-                      onClick={() => setSelectedSubject(r.subject)}
-                      className="text-left rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-300 dark:hover:border-indigo-700 p-3 transition-all"
-                    >
-                      <div className="text-xl mb-1">{r.icon}</div>
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 leading-tight">{SUBJECT_SHORT[r.subject] ?? r.subject}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{r.steps.length} levels</p>
-                      {done > 0 && (
-                        <div className="mt-1.5 h-1 w-full bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
-                          <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${Math.round((done / r.steps.length) * 100)}%` }} />
-                        </div>
-                      )}
-                    </button>
+                    <div key={r.subject} className="relative group">
+                      <button
+                        onClick={() => setSelectedSubject(r.subject)}
+                        className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-300 dark:hover:border-indigo-700 p-3 transition-all"
+                      >
+                        <div className="text-xl mb-1">{r.icon}</div>
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 leading-tight pr-4">
+                          {SUBJECT_SHORT[r.subject] ?? r.subject}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{r.steps.length} levels</p>
+                        {done > 0 && (
+                          <div className="mt-1.5 h-1 w-full bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${Math.round((done / r.steps.length) * 100)}%` }} />
+                          </div>
+                        )}
+                      </button>
+                      {/* × dismiss button */}
+                      <button
+                        onClick={e => { e.stopPropagation(); setHiddenSubjects(prev => new Set([...prev, r.subject])); }}
+                        title={`Hide ${SUBJECT_SHORT[r.subject] ?? r.subject}`}
+                        className="absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-600 text-slate-400 dark:text-slate-400 hover:bg-red-100 dark:hover:bg-red-900/40 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all text-[10px] font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   );
                 })}
               </div>
