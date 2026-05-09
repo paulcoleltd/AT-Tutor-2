@@ -50,8 +50,8 @@ const MODE_INSTRUCTIONS: Record<TeachMode, string> = {
     '  • For multi-select: state "Select TWO" or "Select all that apply"\n' +
     '  • For True/False: require justification — "(True or False — justify your answer)"\n' +
     '  • Show mark allocation per question e.g. **(1 mark)**\n' +
-    '  • End the exam paper with ONLY a --- divider line. STOP there.\n' +
-    '  • Do NOT generate a Q1:/Q2:/Q3: answer template. Do NOT add "Write your answers here". Do NOT add any text after the --- line.\n\n' +
+    '  • After the last question, output ONLY a --- divider line, then STOP completely.\n' +
+    '  • Do NOT add a "How to Submit" section. Do NOT add submission instructions. Do NOT add Q1:/Q2: answer lines. Do NOT add any encouragement or closing text. The UI handles submission.\n\n' +
 
     'PHASE 2 — GRADING (triggered when user submits answers):\n' +
     'Grade EVERY question. For each:\n' +

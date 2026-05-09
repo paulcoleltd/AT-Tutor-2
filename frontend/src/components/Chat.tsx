@@ -1117,14 +1117,15 @@ export const Chat: React.FC<Props> = ({
         )}
 
         {messages.map((msg, idx) => {
-          // Detect exam paper: assistant message in exam mode that contains Q1..QN + SUBMIT prompt
+          // Detect exam paper by content alone — does NOT require mode === 'exam'
+          // so the Answer Pad stays visible even if the user accidentally clicks
+          // a different mode button after the exam was generated.
           const isExamPaper =
             msg.role === 'assistant' &&
             !msg.streaming &&
             !msg.isError &&
-            mode === 'exam' &&
-            /\bQ\d+\b.*\bQ\d+\b/s.test(msg.content) &&
-            /submit/i.test(msg.content);
+            /\bQ\d+\b[\s\S]{0,200}\bQ\d+\b[\s\S]{0,200}\bQ\d+\b/i.test(msg.content) &&
+            (/---/.test(msg.content) || /submit/i.test(msg.content));
 
           // Only show answer pad on the LAST exam paper (before any graded response)
           const isLastExamPaper = isExamPaper && !messages.slice(idx + 1).some(
