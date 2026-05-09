@@ -20,9 +20,8 @@ export const CONFIG = {
   // Accept both ANTHROPIC_API_KEY (SDK standard) and CLAUDE_API_KEY (legacy)
   claudeApiKey:       process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '',
   geminiApiKey:       process.env.GEMINI_API_KEY  || '',
-  // Model override via CLAUDE_MODEL env var; default is claude-3-5-sonnet which
-  // works with all API tiers. Set CLAUDE_MODEL=claude-sonnet-4-6 for Claude 4.x.
-  claudeModel:        process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20241022',
+  // Model override via CLAUDE_MODEL env var.
+  claudeModel:        process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
   maxFileSizeMb:      parseInt(process.env.MAX_FILE_SIZE_MB      || '20',    10),
   rateLimitWindowMs:  parseInt(process.env.RATE_LIMIT_WINDOW_MS  || '60000', 10),
   rateLimitMax:       parseInt(process.env.RATE_LIMIT_MAX        || '60',    10),
