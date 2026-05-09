@@ -291,16 +291,16 @@ function StepCard({ step, isLast, status, onStatusChange, langFilter, isLanguage
 // ── Main component ─────────────────────────────────────────────────────────────
 export const LearningRoadmap: React.FC = () => {
   const [open,            setOpen]            = useState(false);
-  const [selectedSubject, setSelectedSubject] = useState<string>(ROADMAPS[0].subject);
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [progress,        setProgress]        = useState<ProgressMap>(loadProgress);
   const [langFilter,      setLangFilter]      = useState('All');
 
-  const roadmap = useMemo<SubjectRoadmap>(
-    () => ROADMAPS.find(r => r.subject === selectedSubject) ?? ROADMAPS[0],
+  const roadmap = useMemo<SubjectRoadmap | null>(
+    () => selectedSubject ? (ROADMAPS.find(r => r.subject === selectedSubject) ?? null) : null,
     [selectedSubject],
   );
 
-  const isLanguagePath = selectedSubject.toLowerCase().includes('language');
+  const isLanguagePath = (selectedSubject ?? '').toLowerCase().includes('language');
 
   // Persist progress on every change
   useEffect(() => { saveProgress(progress); }, [progress]);
@@ -309,6 +309,7 @@ export const LearningRoadmap: React.FC = () => {
   useEffect(() => { setLangFilter('All'); }, [selectedSubject]);
 
   const setStepStatus = useCallback((level: string, status: StepStatus) => {
+    if (!selectedSubject) return;
     setProgress(prev => ({
       ...prev,
       [selectedSubject]: { ...(prev[selectedSubject] ?? {}), [level]: status },
@@ -316,15 +317,15 @@ export const LearningRoadmap: React.FC = () => {
   }, [selectedSubject]);
 
   const getStepStatus = (level: string): StepStatus =>
-    (progress[selectedSubject]?.[level] as StepStatus) ?? 'not-started';
+    (progress[selectedSubject ?? '']?.[level] as StepStatus) ?? 'not-started';
 
-  // Enhancement 2: Path progress bar
-  const doneCount = roadmap.steps.filter(s => getStepStatus(s.level) === 'done').length;
-  const totalSteps = roadmap.steps.length;
+  // Enhancement 2: Path progress bar (only when a subject is selected)
+  const doneCount  = roadmap ? roadmap.steps.filter(s => getStepStatus(s.level) === 'done').length : 0;
+  const totalSteps = roadmap ? roadmap.steps.length : 0;
   const progressPct = totalSteps > 0 ? Math.round((doneCount / totalSteps) * 100) : 0;
 
   // Enhancement 3: Total study hours
-  const totalHrs = totalHours(roadmap.steps);
+  const totalHrs = roadmap ? totalHours(roadmap.steps) : 0;
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -378,112 +379,119 @@ export const LearningRoadmap: React.FC = () => {
                 </button>
               );
             })}
-            {/* Clear selection button */}
-            <button
-              onClick={() => setSelectedSubject(ROADMAPS[0].subject)}
-              title="Reset to first subject"
-              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 dark:hover:text-red-400 transition-colors border border-slate-200 dark:border-slate-600"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
-                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/>
-              </svg>
-              Clear
-            </button>
-          </div>
-
-          {/* Subject header */}
-          <div className="px-4 pb-3">
-            <div className="bg-slate-50 dark:bg-slate-700/40 rounded-xl p-3 mb-3">
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">{roadmap.icon}</span>
-                  <p className="text-base font-bold text-slate-800 dark:text-slate-100">{roadmap.subject}</p>
-                </div>
-                {/* Enhancement 3: Time investment */}
-                {totalHrs > 0 && (
-                  <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0">
-                    ~{totalHrs}h total
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-2">{roadmap.description}</p>
-
-              {/* Enhancement 2: Progress bar */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <div className="flex gap-3">
-                    {roadmap.steps.map(st => {
-                      const lvlStatus = getStepStatus(st.level);
-                      const sc = LEVEL_STYLES[st.level];
-                      return (
-                        <div key={st.level} className="flex items-center gap-1">
-                          <div className={`w-2 h-2 rounded-full ${lvlStatus === 'done' ? 'bg-emerald-400' : lvlStatus === 'in-progress' ? 'bg-amber-400' : sc?.dot}`} />
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 capitalize">{st.level}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                      {doneCount}/{totalSteps} done
-                    </span>
-                    {doneCount > 0 && (
-                      <button
-                        onClick={() => setProgress(prev => ({ ...prev, [selectedSubject]: {} }))}
-                        title="Reset all progress for this subject"
-                        className="text-[10px] text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors underline"
-                      >
-                        Reset
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-400 rounded-full transition-all duration-500"
-                    style={{ width: `${progressPct}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Enhancement 4: Language filter (Languages path only) */}
-            {isLanguagePath && (
-              <div className="mb-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5">Filter by language</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {LANG_FILTERS.map(f => (
-                    <button
-                      key={f.label}
-                      onClick={() => setLangFilter(f.label)}
-                      className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
-                        langFilter === f.label
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            {/* Clear selection — only shown when a subject is active */}
+            {selectedSubject && (
+              <button
+                onClick={() => setSelectedSubject(null)}
+                title="Deselect subject"
+                className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 dark:hover:text-red-400 transition-colors border border-slate-200 dark:border-slate-600"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/>
+                </svg>
+                Clear
+              </button>
             )}
           </div>
 
-          {/* Steps */}
-          <div className="px-4 pb-3">
-            {roadmap.steps.map((step, i) => (
-              <StepCard
-                key={step.level}
-                step={step}
-                isLast={i === roadmap.steps.length - 1}
-                status={getStepStatus(step.level)}
-                onStatusChange={st => setStepStatus(step.level, st)}
-                langFilter={langFilter}
-                isLanguagePath={isLanguagePath}
-              />
-            ))}
-          </div>
+          {/* Overview grid — shown when no subject is selected (after Clear) */}
+          {!roadmap && (
+            <div className="px-4 pb-4">
+              <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">Select a subject above to view its roadmap.</p>
+              <div className="grid grid-cols-2 gap-2">
+                {ROADMAPS.map(r => {
+                  const sub = progress[r.subject] ?? {};
+                  const done = r.steps.filter(st => sub[st.level] === 'done').length;
+                  return (
+                    <button
+                      key={r.subject}
+                      onClick={() => setSelectedSubject(r.subject)}
+                      className="text-left rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-300 dark:hover:border-indigo-700 p-3 transition-all"
+                    >
+                      <div className="text-xl mb-1">{r.icon}</div>
+                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 leading-tight">{SUBJECT_SHORT[r.subject] ?? r.subject}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{r.steps.length} levels</p>
+                      {done > 0 && (
+                        <div className="mt-1.5 h-1 w-full bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${Math.round((done / r.steps.length) * 100)}%` }} />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Subject detail — shown when a subject is selected */}
+          {roadmap && (
+            <>
+              <div className="px-4 pb-3">
+                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-xl p-3 mb-3">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">{roadmap.icon}</span>
+                      <p className="text-base font-bold text-slate-800 dark:text-slate-100">{roadmap.subject}</p>
+                    </div>
+                    {totalHrs > 0 && (
+                      <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0">~{totalHrs}h total</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-2">{roadmap.description}</p>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-3">
+                        {roadmap.steps.map(st => {
+                          const lvlStatus = getStepStatus(st.level);
+                          const sc = LEVEL_STYLES[st.level];
+                          return (
+                            <div key={st.level} className="flex items-center gap-1">
+                              <div className={`w-2 h-2 rounded-full ${lvlStatus === 'done' ? 'bg-emerald-400' : lvlStatus === 'in-progress' ? 'bg-amber-400' : sc?.dot}`} />
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 capitalize">{st.level}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">{doneCount}/{totalSteps} done</span>
+                        {doneCount > 0 && selectedSubject && (
+                          <button
+                            onClick={() => setProgress(prev => ({ ...prev, [selectedSubject]: {} }))}
+                            className="text-[10px] text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors underline"
+                          >Reset</button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-400 rounded-full transition-all duration-500" style={{ width: `${progressPct}%` }} />
+                    </div>
+                  </div>
+                </div>
+
+                {isLanguagePath && (
+                  <div className="mb-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5">Filter by language</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {LANG_FILTERS.map(f => (
+                        <button key={f.label} onClick={() => setLangFilter(f.label)}
+                          className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${langFilter === f.label ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
+                        >{f.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="px-4 pb-3">
+                {roadmap.steps.map((step, i) => (
+                  <StepCard key={step.level} step={step} isLast={i === roadmap.steps.length - 1}
+                    status={getStepStatus(step.level)} onStatusChange={st => setStepStatus(step.level, st)}
+                    langFilter={langFilter} isLanguagePath={isLanguagePath}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
