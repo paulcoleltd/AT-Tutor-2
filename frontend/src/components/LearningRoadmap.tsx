@@ -353,8 +353,8 @@ export const LearningRoadmap: React.FC = () => {
       {open && (
         <div className="border-t border-slate-100 dark:border-slate-700">
 
-          {/* Subject pills */}
-          <div className="px-4 pt-3 pb-2 flex flex-wrap gap-2">
+          {/* Subject pills + Clear button */}
+          <div className="px-4 pt-3 pb-2 flex flex-wrap gap-2 items-center">
             {ROADMAPS.map(r => {
               const sub = progress[r.subject] ?? {};
               const done = r.steps.filter(st => sub[st.level] === 'done').length;
@@ -378,6 +378,17 @@ export const LearningRoadmap: React.FC = () => {
                 </button>
               );
             })}
+            {/* Clear selection button */}
+            <button
+              onClick={() => setSelectedSubject(ROADMAPS[0].subject)}
+              title="Reset to first subject"
+              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 dark:hover:text-red-400 transition-colors border border-slate-200 dark:border-slate-600"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/>
+              </svg>
+              Clear
+            </button>
           </div>
 
           {/* Subject header */}
@@ -412,9 +423,20 @@ export const LearningRoadmap: React.FC = () => {
                       );
                     })}
                   </div>
-                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                    {doneCount}/{totalSteps} done
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                      {doneCount}/{totalSteps} done
+                    </span>
+                    {doneCount > 0 && (
+                      <button
+                        onClick={() => setProgress(prev => ({ ...prev, [selectedSubject]: {} }))}
+                        title="Reset all progress for this subject"
+                        className="text-[10px] text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors underline"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
                   <div
