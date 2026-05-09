@@ -50,9 +50,8 @@ const MODE_INSTRUCTIONS: Record<TeachMode, string> = {
     '  • For multi-select: state "Select TWO" or "Select all that apply"\n' +
     '  • For True/False: require justification — "(True or False — justify your answer)"\n' +
     '  • Show mark allocation per question e.g. **(1 mark)**\n' +
-    '  • End with the divider line then:\n' +
-    '    ---\n' +
-    '    📝 **Use the Answer Pad below to record your answers, then click SUBMIT for your score.**\n\n' +
+    '  • End the exam paper with ONLY a --- divider line. STOP there.\n' +
+    '  • Do NOT generate a Q1:/Q2:/Q3: answer template. Do NOT add "Write your answers here". Do NOT add any text after the --- line.\n\n' +
 
     'PHASE 2 — GRADING (triggered when user submits answers):\n' +
     'Grade EVERY question. For each:\n' +
