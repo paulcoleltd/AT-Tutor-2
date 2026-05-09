@@ -7,6 +7,7 @@ import { profileToContext } from '../hooks/useUserProfile';
 import { VoiceControls } from './VoiceControls';
 import { SessionHistory } from './SessionHistory';
 import { CertificationSelector } from './CertificationSelector';
+import { ExamAnswerPad } from './ExamAnswerPad';
 import type { CertInfo } from '../lib/api';
 
 // Detect "navigate to / go to / open / load / check / look at <URL>" patterns
@@ -461,9 +462,19 @@ export const Chat: React.FC<Props> = ({
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const resolvedPersona = persona === 'Custom role...' ? (customPersona.trim() || 'AI Tutor') : persona;
   const textareaRef   = useRef<HTMLTextAreaElement>(null);
-  const abortRef      = useRef<AbortController | null>(null);
+  const abortRef            = useRef<AbortController | null>(null);
+  const pendingExamSubmit   = useRef<string | null>(null);
   const liveRegionRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Fire handleSend once input state has settled with exam-pad submission text
+  useEffect(() => {
+    if (pendingExamSubmit.current && input === pendingExamSubmit.current) {
+      pendingExamSubmit.current = null;
+      handleSend();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [input]);
 
   // Listen for "Study with AI" events fired by LearningRoadmap cert buttons
   useEffect(() => {
@@ -1105,16 +1116,43 @@ export const Chat: React.FC<Props> = ({
           </div>
         )}
 
-        {messages.map((msg, idx) => (
-          <MessageBubble
-            key={msg.id}
-            msg={msg}
-            isLastAssistant={idx === lastAssistantIdx}
-            isLoading={isLoading}
-            onDelete={handleDeleteMessage}
-            onRegenerate={handleRegenerate}
-          />
-        ))}
+        {messages.map((msg, idx) => {
+          // Detect exam paper: assistant message in exam mode that contains Q1..QN + SUBMIT prompt
+          const isExamPaper =
+            msg.role === 'assistant' &&
+            !msg.streaming &&
+            !msg.isError &&
+            mode === 'exam' &&
+            /\bQ\d+\b.*\bQ\d+\b/s.test(msg.content) &&
+            /submit/i.test(msg.content);
+
+          // Only show answer pad on the LAST exam paper (before any graded response)
+          const isLastExamPaper = isExamPaper && !messages.slice(idx + 1).some(
+            m => m.role === 'user' && /submit/i.test(m.content)
+          );
+
+          return (
+            <React.Fragment key={msg.id}>
+              <MessageBubble
+                msg={msg}
+                isLastAssistant={idx === lastAssistantIdx}
+                isLoading={isLoading}
+                onDelete={handleDeleteMessage}
+                onRegenerate={handleRegenerate}
+              />
+              {isLastExamPaper && (
+                <ExamAnswerPad
+                  examText={msg.content}
+                  disabled={isLoading}
+                  onSubmit={formatted => {
+                    pendingExamSubmit.current = formatted;
+                    setInput(formatted); // useEffect triggers handleSend once state settles
+                  }}
+                />
+              )}
+            </React.Fragment>
+          );
+        })}
 
         {/* Typing indicator */}
         {isLoading && messages[messages.length - 1]?.content === '' && (
