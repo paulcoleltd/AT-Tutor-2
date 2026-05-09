@@ -1,282 +1,248 @@
 /**
  * ExamAnswerPad — interactive answer sheet that appears below an exam paper.
- *
- * Features:
- * - Parses Q1…QN from the exam message text
- * - Auto-detects question type: MCQ → radio buttons, True/False → radio,
- *   Fill-in-blank → single input, theory/application → textarea
- * - Tracks all answers in state
- * - SUBMIT button formats answers + sends to agent for grading
- * - Shows a "not answered" warning before allowing submit
+ * Redesigned for reliability: one clearly-visible text field per question,
+ * robust question parsing, and a single-textarea fallback.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 
 interface Question {
-  number:  number;
-  text:    string;
-  type:    'mcq' | 'truefalse' | 'fillin' | 'theory';
-  options: string[]; // for MCQ
-  marks:   number;
+  number: number;
+  label:  string;   // short display label e.g. "Q1"
+  type:   'mcq' | 'truefalse' | 'short';
+  options: string[];
 }
 
 interface Props {
-  examText:  string;           // raw assistant message text
+  examText:  string;
   onSubmit:  (formatted: string) => void;
   disabled?: boolean;
 }
 
-// ── Question parser ────────────────────────────────────────────────────────────
+// ── Robust question parser ─────────────────────────────────────────────────────
 function parseQuestions(text: string): Question[] {
-  // Split on Q1, Q2, etc. boundaries
-  const blocks = text.split(/(?=\n\*{0,2}Q\d+[\s—–-])/i).filter(b => /Q\d+/i.test(b));
+  const questions: Question[] = [];
+  // Match Q1, Q2, Q1., Q1:, **Q1**, Q1 —  etc.
+  const re = /(?:^|\n)\s*\*{0,2}(Q\s*(\d{1,3}))\*{0,2}\s*[.:\-—–\s]/gm;
+  const found = new Set<number>();
+  let m: RegExpExecArray | null;
 
-  return blocks.map(block => {
-    const numMatch = block.match(/Q(\d+)/i);
-    const number = numMatch ? parseInt(numMatch[1]) : 0;
+  while ((m = re.exec(text)) !== null) {
+    const num = parseInt(m[2]);
+    if (!found.has(num) && num >= 1 && num <= 200) {
+      found.add(num);
 
-    // Extract mark value
-    const markMatch = block.match(/\((\d+)\s*marks?\)/i);
-    const marks = markMatch ? parseInt(markMatch[1]) : 1;
+      // Extract snippet of text after the Q number (up to 300 chars)
+      const startIdx = m.index + m[0].length;
+      const snippet = text.slice(startIdx, startIdx + 300).split(/\n\s*\*{0,2}Q\d+/)[0].trim();
 
-    // Clean question text (strip markdown bold markers, trim)
-    const cleanText = block
-      .replace(/\*\*/g, '')
-      .replace(/Q\d+\s*[—–-]\s*/i, '')
-      .trim()
-      .slice(0, 400);
+      // Detect type
+      const isTF  = /true\s+or\s+false/i.test(snippet);
+      const hasMCQ = /^\s*[A-D]\s*[).]/m.test(snippet);
+      const type: Question['type'] = isTF ? 'truefalse' : hasMCQ ? 'mcq' : 'short';
 
-    // Detect MCQ: look for A) B) C) D) options
-    const optionMatches = block.match(/^[A-D]\)\s*.+$/gm);
-    if (optionMatches && optionMatches.length >= 2) {
-      return {
-        number, text: cleanText, type: 'mcq' as const, marks,
-        options: optionMatches.map(o => o.trim()),
-      };
+      // Extract MCQ options
+      const opts: string[] = [];
+      if (hasMCQ) {
+        const optRe = /^\s*([A-D])\s*[).\s]\s*(.+)$/gm;
+        let om: RegExpExecArray | null;
+        while ((om = optRe.exec(snippet)) !== null) opts.push(`${om[1]}) ${om[2].trim()}`);
+      }
+
+      questions.push({ number: num, label: `Q${num}`, type, options: opts });
     }
+  }
 
-    // Detect True/False
-    if (/true\s+or\s+false/i.test(block)) {
-      return { number, text: cleanText, type: 'truefalse' as const, marks, options: ['True', 'False'] };
-    }
-
-    // Detect Fill-in-the-blank
-    if (/______+|fill\s+in/i.test(block)) {
-      return { number, text: cleanText, type: 'fillin' as const, marks, options: [] };
-    }
-
-    // Default: theory (textarea)
-    return { number, text: cleanText, type: 'theory' as const, marks, options: [] };
-  }).filter(q => q.number > 0);
+  return questions.sort((a, b) => a.number - b.number);
 }
 
-// ── AnswerInput ────────────────────────────────────────────────────────────────
-function AnswerInput({
-  question, value, onChange,
-}: { question: Question; value: string; onChange: (v: string) => void }) {
+// ── Single question answer input ───────────────────────────────────────────────
+function QInput({ q, value, onChange, answerRef }: {
+  q: Question;
+  value: string;
+  onChange: (v: string) => void;
+  answerRef?: React.RefObject<HTMLTextAreaElement>;
+}) {
+  const baseInput = 'block w-full rounded-lg border border-slate-300 dark:border-slate-500 bg-slate-50 dark:bg-slate-600 text-slate-900 dark:text-slate-50 placeholder-slate-400 dark:placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm';
 
-  if (question.type === 'mcq') {
+  if (q.type === 'truefalse') {
+    const tf = value.match(/^(True|False)/i)?.[1] ?? '';
+    const justification = value.replace(/^(True|False)\s*[-—]?\s*/i, '');
     return (
-      <div className="space-y-1.5 mt-2">
-        {question.options.map(opt => (
-          <label key={opt} className={`flex items-start gap-2.5 p-2 rounded-lg cursor-pointer border transition-colors ${
-            value === opt
-              ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-600'
-              : 'bg-slate-50 dark:bg-slate-700/40 border-slate-200 dark:border-slate-600 hover:border-indigo-200 dark:hover:border-indigo-700'
-          }`}>
-            <input type="radio" name={`q${question.number}`} value={opt} checked={value === opt}
-              onChange={e => onChange(e.target.value)}
-              className="mt-0.5 accent-indigo-600 flex-shrink-0" />
-            <span className="text-sm text-slate-700 dark:text-slate-200">{opt}</span>
-          </label>
-        ))}
-      </div>
-    );
-  }
-
-  if (question.type === 'truefalse') {
-    return (
-      <div className="flex gap-3 mt-2">
-        {['True', 'False'].map(opt => (
-          <label key={opt} className={`flex items-center gap-2 px-5 py-2 rounded-xl cursor-pointer border font-semibold text-sm transition-colors ${
-            value === opt
-              ? opt === 'True'
-                ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-400 text-emerald-700 dark:text-emerald-400'
-                : 'bg-red-50 dark:bg-red-900/30 border-red-400 text-red-700 dark:text-red-400'
-              : 'bg-slate-50 dark:bg-slate-700/40 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-slate-400'
-          }`}>
-            <input type="radio" name={`q${question.number}`} value={opt} checked={value === opt}
-              onChange={e => onChange(e.target.value)} className="sr-only" />
-            <span>{opt === 'True' ? '✓' : '✗'}</span>
-            <span>{opt}</span>
-          </label>
-        ))}
-        {/* Justification box always shown for T/F */}
-        <div className="flex-1 min-w-0">
-          <input
-            type="text"
-            placeholder="Justify your answer…"
-            value={value.replace(/^(True|False)\s*/i, '')}
-            onChange={e => {
-              const tf = value.match(/^(True|False)/i)?.[0] ?? '';
-              onChange(tf ? `${tf} — ${e.target.value}` : e.target.value);
-            }}
-            className="w-full text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          />
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          {['True', 'False'].map(opt => (
+            <button key={opt} type="button"
+              onClick={() => onChange(opt + (justification ? ` — ${justification}` : ''))}
+              className={`flex-1 py-2 rounded-lg text-sm font-semibold border-2 transition-colors ${
+                tf === opt
+                  ? opt === 'True'
+                    ? 'bg-emerald-500 border-emerald-500 text-white'
+                    : 'bg-red-500 border-red-500 text-white'
+                  : 'bg-white dark:bg-slate-600 border-slate-300 dark:border-slate-500 text-slate-700 dark:text-slate-200 hover:border-indigo-400'
+              }`}
+            >{opt === 'True' ? '✓ True' : '✗ False'}</button>
+          ))}
         </div>
+        <input type="text" placeholder="Justify your answer…"
+          value={justification}
+          onChange={e => onChange((tf || 'True') + ` — ${e.target.value}`)}
+          className={baseInput + ' px-3 py-2'} />
       </div>
     );
   }
 
-  if (question.type === 'fillin') {
+  if (q.type === 'mcq' && q.options.length > 0) {
     return (
-      <input
-        type="text"
-        placeholder="Your answer…"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="mt-2 w-full text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-      />
+      <div className="space-y-1.5">
+        {q.options.map(opt => (
+          <label key={opt} className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+            value === opt
+              ? 'bg-indigo-50 dark:bg-indigo-900/40 border-indigo-400 text-indigo-800 dark:text-indigo-200'
+              : 'bg-white dark:bg-slate-600 border-slate-300 dark:border-slate-500 text-slate-800 dark:text-slate-100 hover:border-indigo-300'
+          }`}>
+            <input type="radio" className="accent-indigo-600 flex-shrink-0"
+              checked={value === opt} onChange={() => onChange(opt)} />
+            <span className="text-sm">{opt}</span>
+          </label>
+        ))}
+      </div>
     );
   }
 
-  // theory / application
+  // Short answer / theory
   return (
-    <textarea
-      rows={3}
-      placeholder="Write your answer here…"
+    <textarea ref={answerRef} rows={3}
+      placeholder={`Type your answer for Q${q.number} here…`}
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="mt-2 w-full text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-y"
+      className={baseInput + ' px-3 py-2 resize-y min-h-[72px]'}
     />
   );
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export const ExamAnswerPad: React.FC<Props> = ({ examText, onSubmit, disabled }) => {
-  const questions = useMemo(() => parseQuestions(examText), [examText]);
-  const [answers,    setAnswers]    = useState<Record<number, string>>({});
-  const [submitted,  setSubmitted]  = useState(false);
-  const [showWarn,   setShowWarn]   = useState(false);
+  const questions   = useMemo(() => parseQuestions(examText), [examText]);
+  const [answers,   setAnswers]   = useState<Record<number, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [warn,      setWarn]      = useState(false);
+  const firstRef    = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    // Focus first text answer on mount
+    firstRef.current?.focus();
+  }, []);
 
   if (questions.length === 0) return null;
 
-  const totalMarks    = questions.reduce((s, q) => s + q.marks, 0);
-  const answeredCount = questions.filter(q => (answers[q.number] ?? '').trim().length > 0).length;
-  const allAnswered   = answeredCount === questions.length;
+  const answered    = questions.filter(q => (answers[q.number] ?? '').trim()).length;
+  const allAnswered = answered === questions.length;
+  const pct         = Math.round((answered / questions.length) * 100);
 
-  const handleSubmit = () => {
-    if (!allAnswered) { setShowWarn(true); return; }
-    setShowWarn(false);
+  const handleSubmit = (force = false) => {
+    if (!force && !allAnswered) { setWarn(true); return; }
+    setWarn(false);
     setSubmitted(true);
-
-    const formatted = questions.map(q => {
-      const ans = (answers[q.number] ?? '').trim() || '(no answer)';
+    const text = questions.map(q => {
+      const ans = (answers[q.number] ?? '').trim() || '(no answer provided)';
       return `Q${q.number}: ${ans}`;
     }).join('\n') + '\n\nSUBMIT';
-
-    onSubmit(formatted);
+    onSubmit(text);
   };
 
   return (
-    <div className="mt-4 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 overflow-hidden shadow-md">
+    <div className="mt-4 rounded-2xl overflow-hidden shadow-lg border-2 border-indigo-300 dark:border-indigo-700">
 
       {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-5 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📝</span>
+      <div className="bg-indigo-600 px-5 py-3 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2.5">
+          <span className="text-xl">📝</span>
           <div>
             <p className="text-white font-bold text-sm leading-tight">Answer Pad</p>
-            <p className="text-blue-200 text-[11px]">{questions.length} questions · {totalMarks} marks total</p>
+            <p className="text-indigo-200 text-xs">{questions.length} questions to answer</p>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-white text-xs font-semibold">{answeredCount}/{questions.length} answered</p>
-          {!allAnswered && (
-            <div className="h-1 w-24 bg-white/20 rounded-full mt-1 overflow-hidden">
-              <div className="h-full bg-white/80 rounded-full transition-all" style={{ width: `${(answeredCount / questions.length) * 100}%` }} />
-            </div>
-          )}
+        <div className="text-right flex-shrink-0">
+          <p className="text-white text-xs font-semibold">{answered}/{questions.length} answered</p>
+          <div className="h-1.5 w-28 bg-indigo-800 rounded-full mt-1 overflow-hidden">
+            <div className="h-full bg-white rounded-full transition-all" style={{ width: `${pct}%` }} />
+          </div>
         </div>
       </div>
 
       {submitted ? (
-        <div className="px-5 py-6 text-center space-y-2">
-          <p className="text-2xl">⏳</p>
-          <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Grading in progress…</p>
-          <p className="text-xs text-slate-400">The AI is marking your answers. Results will appear in the chat above.</p>
+        <div className="bg-white dark:bg-slate-800 px-5 py-8 text-center">
+          <p className="text-3xl mb-2">⏳</p>
+          <p className="text-base font-bold text-slate-700 dark:text-slate-200">Grading your answers…</p>
+          <p className="text-sm text-slate-400 mt-1">Results will appear in the chat above.</p>
         </div>
       ) : (
-        <>
+        <div className="bg-white dark:bg-slate-800">
           {/* Answer fields */}
           <div className="divide-y divide-slate-100 dark:divide-slate-700">
-            {questions.map(q => (
-              <div key={q.number} className={`px-5 py-4 ${
-                (answers[q.number] ?? '').trim()
-                  ? 'bg-emerald-50/30 dark:bg-emerald-900/5'
-                  : ''
-              }`}>
-                {/* Question header */}
-                <div className="flex items-start gap-2 mb-1">
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${
-                    (answers[q.number] ?? '').trim()
-                      ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400'
-                      : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400'
-                  }`}>Q{q.number}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug line-clamp-3">{q.text}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{q.marks} mark{q.marks !== 1 ? 's' : ''}</p>
+            {questions.map((q, idx) => {
+              const val = answers[q.number] ?? '';
+              const done = val.trim().length > 0;
+              return (
+                <div key={q.number} className="px-5 py-4">
+                  {/* Q label row */}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                      done
+                        ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400'
+                        : 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400'
+                    }`}>
+                      {q.label}
+                    </span>
+                    {done && <span className="text-emerald-500 text-sm font-bold">✓ Answered</span>}
                   </div>
-                  {(answers[q.number] ?? '').trim() && (
-                    <span className="text-emerald-400 flex-shrink-0">✓</span>
-                  )}
-                </div>
 
-                <AnswerInput
-                  question={q}
-                  value={answers[q.number] ?? ''}
-                  onChange={v => setAnswers(prev => ({ ...prev, [q.number]: v }))}
-                />
-              </div>
-            ))}
+                  {/* Input */}
+                  <QInput
+                    q={q}
+                    value={val}
+                    onChange={v => { setAnswers(p => ({ ...p, [q.number]: v })); setWarn(false); }}
+                    answerRef={idx === 0 ? firstRef : undefined}
+                  />
+                </div>
+              );
+            })}
           </div>
 
           {/* Warning */}
-          {showWarn && !allAnswered && (
-            <div className="mx-5 mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-700 dark:text-amber-400">
-              ⚠️ {questions.length - answeredCount} question{questions.length - answeredCount !== 1 ? 's' : ''} still unanswered. You can submit anyway or go back and complete them.
+          {warn && !allAnswered && (
+            <div className="mx-5 mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl text-sm text-amber-700 dark:text-amber-400">
+              ⚠️ {questions.length - answered} question{questions.length - answered !== 1 ? 's' : ''} still blank.
+              You can submit anyway or go back to fill them in.
             </div>
           )}
 
           {/* Footer */}
-          <div className="px-5 py-4 bg-slate-50 dark:bg-slate-700/30 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between gap-3">
-            <p className="text-xs text-slate-400 dark:text-slate-500">
-              {allAnswered ? '✅ All answered — ready to submit' : `${questions.length - answeredCount} remaining`}
+          <div className="px-5 py-4 bg-slate-50 dark:bg-slate-700/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {allAnswered
+                ? '✅ All answered — ready to submit'
+                : `${questions.length - answered} question${questions.length - answered !== 1 ? 's' : ''} remaining`}
             </p>
             <div className="flex gap-2">
               {!allAnswered && (
-                <button
-                  onClick={handleSubmit}
-                  disabled={disabled}
-                  className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 text-xs font-medium hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50"
-                >
+                <button onClick={() => handleSubmit(true)} disabled={disabled}
+                  className="px-4 py-2 text-sm rounded-xl bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-500 disabled:opacity-50 transition-colors">
                   Submit anyway
                 </button>
               )}
-              <button
-                onClick={handleSubmit}
-                disabled={disabled}
-                className={`px-6 py-2 rounded-xl text-sm font-bold text-white transition-all shadow-sm disabled:opacity-50 ${
+              <button onClick={() => handleSubmit(false)} disabled={disabled}
+                className={`px-6 py-2 text-sm font-bold text-white rounded-xl transition-colors disabled:opacity-50 ${
                   allAnswered
-                    ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200 dark:shadow-indigo-900'
+                    ? 'bg-indigo-600 hover:bg-indigo-700'
                     : 'bg-amber-500 hover:bg-amber-600'
-                }`}
-              >
+                }`}>
                 🎓 Submit for Grading
               </button>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
