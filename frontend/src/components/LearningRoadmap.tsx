@@ -451,13 +451,20 @@ export const LearningRoadmap: React.FC = () => {
               <div className="px-4 pb-3">
                 <div className="bg-slate-50 dark:bg-slate-700/40 rounded-xl p-3 mb-3">
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl">{roadmap.icon}</span>
-                      <p className="text-base font-bold text-slate-800 dark:text-slate-100">{roadmap.subject}</p>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-2xl flex-shrink-0">{roadmap.icon}</span>
+                      <p className="text-base font-bold text-slate-800 dark:text-slate-100 truncate">{roadmap.subject}</p>
                     </div>
-                    {totalHrs > 0 && (
-                      <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0">~{totalHrs}h total</span>
-                    )}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {totalHrs > 0 && (
+                        <span className="text-xs text-slate-500 dark:text-slate-400">~{totalHrs}h total</span>
+                      )}
+                      <button
+                        onClick={() => setSelectedSubject(null)}
+                        title="Close subject"
+                        className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-400 hover:bg-red-100 dark:hover:bg-red-900/40 hover:text-red-500 dark:hover:text-red-400 transition-colors text-xs font-bold flex-shrink-0"
+                      >✕</button>
+                    </div>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-2">{roadmap.description}</p>
                   <div className="space-y-1">
