@@ -465,6 +465,21 @@ export const Chat: React.FC<Props> = ({
   const liveRegionRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
+  // Listen for "Study with AI" events fired by LearningRoadmap cert buttons
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const prompt = (e as CustomEvent<{ prompt: string }>).detail?.prompt;
+      if (prompt) {
+        setInput(prompt);
+        textareaRef.current?.focus();
+        // Scroll chat into view on mobile
+        textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    };
+    window.addEventListener('ai-tutor:study', handler);
+    return () => window.removeEventListener('ai-tutor:study', handler);
+  }, []);
+
   useEffect(() => {
     if (isRoleLoaded) return;
     const storedPersona = window.localStorage.getItem('ai-tutor-persona') as RoleOption | null;
