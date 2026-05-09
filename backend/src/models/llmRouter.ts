@@ -86,9 +86,23 @@ export async function* streamLLM(
     } catch (err) {
       const providerErr = err instanceof LLMError ? err : new LLMError(`Unexpected error from ${provider}: ${(err as Error).message}`, provider, err);
       lastError = providerErr;
-      // Only attempt fallback if the provider failed before or immediately after startup
-      // otherwise partial output may already have been streamed and cannot be safely retried.
-      if (providerErr.message.includes('Empty response') || providerErr.message.includes('API key') || providerErr.message.includes('unsupported') || providerErr.message.includes('server error')) {
+      // Retry on next provider for: quota/rate limits, auth issues, empty responses,
+      // or any upstream 5xx. Throw immediately only for client errors we can't recover from.
+      const msg = providerErr.message.toLowerCase();
+      const shouldFallback =
+        msg.includes('empty response') ||
+        msg.includes('api key') ||
+        msg.includes('unsupported') ||
+        msg.includes('server error') ||
+        msg.includes('429') ||
+        msg.includes('quota') ||
+        msg.includes('rate limit') ||
+        msg.includes('too many requests') ||
+        msg.includes('overloaded') ||
+        msg.includes('unavailable') ||
+        msg.includes('timeout');
+      if (shouldFallback) {
+        console.warn(`[llm] ${provider} failed (${providerErr.message.slice(0, 80)}), trying next provider`);
         continue;
       }
       throw providerErr;
