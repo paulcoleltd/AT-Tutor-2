@@ -1,6 +1,7 @@
 services:
-  # Single web service: backend Express server also serves the React frontend.
-  # The frontend is built first so backend/src/index.ts finds frontend/dist at start.
+  # Single web service: persistent Node.js — no cold starts, unlike Vercel Hobby.
+  # Backend Express server also serves the built React frontend.
+  # Handles 20+ concurrent users comfortably at standard plan.
   - type: web
     name: ai-tutor-agent
     env: node
@@ -16,13 +17,43 @@ services:
         value: /data
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: "4000"
+
+      # LLM providers — set at least one
       - key: LLM_PROVIDER
-        sync: false
+        sync: false          # e.g. "claude"
+      - key: ANTHROPIC_API_KEY
+        sync: false          # preferred (SDK standard)
       - key: CLAUDE_API_KEY
-        sync: false
+        sync: false          # legacy alias — either works
       - key: OPENAI_API_KEY
         sync: false
       - key: GEMINI_API_KEY
         sync: false
-      - key: ALLOWED_ORIGIN
+      - key: CLAUDE_MODEL
+        value: "claude-sonnet-4-6"
+
+      # Performance tuning — persistent server can handle higher concurrency
+      - key: MAX_CONCURRENT_LLM
+        value: "16"          # raise from default 12; Render/Railway have persistent sockets
+
+      # Memory (Supabase) — optional but recommended
+      - key: SUPABASE_URL
         sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+      # Security
+      - key: ALLOWED_ORIGIN
+        sync: false          # e.g. https://yourdomain.com
+
+      # Limits
+      - key: MAX_FILE_SIZE_MB
+        value: "20"
+      - key: RATE_LIMIT_MAX
+        value: "60"
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "60000"
+      - key: RETRIEVAL_TOP_K
+        value: "5"

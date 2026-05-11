@@ -76,7 +76,9 @@ export async function callLLM(system: string, user: string, history: Message[]):
 // Caps simultaneous in-flight LLM calls. Under heavy load, excess requests
 // wait here rather than all hitting the API at once (which causes 60–120s
 // queue build-up and cascading timeouts at 50+ concurrent users).
-const MAX_CONCURRENT_LLM = parseInt(process.env.MAX_CONCURRENT_LLM || '8', 10);
+// Vercel Hobby: 8 (serverless, each fn handles 1 req — limits cold starts)
+// Vercel Pro / Railway / Render: 12–20 (persistent server, more headroom)
+const MAX_CONCURRENT_LLM = parseInt(process.env.MAX_CONCURRENT_LLM || '12', 10);
 let _activeLLM = 0;
 const _waitQueue: Array<() => void> = [];
 

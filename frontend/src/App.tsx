@@ -248,7 +248,8 @@ const App: React.FC = () => {
             </h2>
             <p className="text-xs text-amber-600 dark:text-amber-500">
               Local: set keys in <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">backend/.env</code>.{' '}
-              Vercel: add <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">ANTHROPIC_API_KEY</code> under Project → Settings → Environment Variables.
+              Vercel: add <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">ANTHROPIC_API_KEY</code> under Project → Settings → Environment Variables.{' '}
+              For better performance at 20+ users, also add <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">MAX_CONCURRENT_LLM=12</code>.
             </p>
             {window.location.hostname !== 'localhost' && (
               <button
