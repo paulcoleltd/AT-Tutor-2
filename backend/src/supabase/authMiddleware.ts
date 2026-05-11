@@ -36,20 +36,17 @@ export async function attachUserId(
     }
   }
 
-  // 2. X-User-Id header (for trusted internal use)
-  const headerUserId = req.headers['x-user-id'] as string | undefined;
-  if (headerUserId) {
-    req.userId = headerUserId;
-    return next();
-  }
+  // X-User-Id header removed — spoofable by any client (CWE-287).
+  // Only Supabase JWT and anonymous cookie are trusted.
 
-  // 3. Anonymous cookie — create one if missing
+  // 2. Anonymous cookie — create one if missing
   let anonId = req.cookies?.[ANON_COOKIE] as string | undefined;
   if (!anonId) {
+    // randomUUID() uses CSPRNG — safe for user identity tokens
     anonId = randomUUID();
     res.cookie(ANON_COOKIE, anonId, {
       httpOnly: true,
-      secure:   process.env.NODE_ENV === 'production',
+      secure:   true,   // Always require HTTPS (CWE-614)
       sameSite: 'lax',
       maxAge:   COOKIE_MAX_AGE * 1000,
     });

@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import { attachUserId } from './supabase/authMiddleware';
+import { verifySupabaseRLS } from './supabase/client';
 import rateLimit from 'express-rate-limit';
 import { CONFIG, validateConfig } from './config';
 import { VectorStore } from './brain/vectorStore';
@@ -70,6 +71,7 @@ export function createApp() {
   app.use(makeLimit(CONFIG.rateLimitMax));
 
   getDb(); // initialise SQLite (creates data/tutor.db if needed)
+  verifySupabaseRLS().catch(() => {}); // non-blocking RLS startup check
 
   const store    = new VectorStore();
   const brain    = new Brain(store);
@@ -95,17 +97,16 @@ export function createApp() {
       gemini: !!process.env.GEMINI_API_KEY,
     };
     const anyKey = Object.values(keysConfigured).some(Boolean);
+    // CWE-200: Return minimal info publicly. Provider names + key presence
+    // are kept for the UI's "No API key" amber warning, but session counts
+    // and detailed KB info are removed to reduce reconnaissance surface.
     res.json({
-      status:            anyKey ? 'ok' : 'degraded',
-      provider:          getActiveProvider(),
+      status:         anyKey ? 'ok' : 'degraded',
+      provider:       getActiveProvider(),
       availableProviders: getAvailableProviders(),
       keysConfigured,
-      knowledgeBase: {
-        totalChunks: kb.totalChunks,
-        sourceCount: kb.sources.length,
-      },
-      sessions: sessions.activeCount,
-      uptime:   process.uptime(),
+      knowledgeBase:  { sourceCount: kb.sources.length },
+      uptime:         Math.floor(process.uptime()),
     });
   });
 
