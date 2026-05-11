@@ -26,6 +26,10 @@ export const CONFIG = {
   rateLimitWindowMs:  parseInt(process.env.RATE_LIMIT_WINDOW_MS  || '60000', 10),
   rateLimitMax:       parseInt(process.env.RATE_LIMIT_MAX        || '60',    10),
   retrievalTopK:      parseInt(process.env.RETRIEVAL_TOP_K       || '5',     10),
+
+  // Supabase — optional. When set, enables persistent cross-device memory.
+  supabaseUrl:        process.env.SUPABASE_URL                 || '',
+  supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY    || '',
 } as const;
 
 export function validateConfig(): void {

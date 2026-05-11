@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
+import { attachUserId } from './supabase/authMiddleware';
 import rateLimit from 'express-rate-limit';
 import { CONFIG, validateConfig } from './config';
 import { VectorStore } from './brain/vectorStore';
@@ -43,9 +45,11 @@ export function createApp() {
   validateConfig();
 
   const app = express();
-  app.set('trust proxy', 1); // Vercel / reverse-proxy: trust X-Forwarded-For
+  app.set('trust proxy', 1);
   app.disable('x-powered-by');
   app.use(helmet());
+  app.use(cookieParser());
+  app.use(attachUserId);
 
   app.use(cors((req, callback) => {
     const origin = req.headers.origin;

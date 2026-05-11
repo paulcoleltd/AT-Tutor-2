@@ -2,6 +2,11 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { TeacherAgent, TeachMode } from '../agent/teacherAgent';
 import { LLMError } from '../models/llmRouter';
+import {
+  getOrCreateSupabaseSession, saveMessage, loadRecentMessages,
+  loadUserProfile, getSemanticMemories, scheduleMemoryUpdate,
+} from '../supabase/memory';
+import { supabaseEnabled } from '../supabase/client';
 
 const ALLOWED_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const;
 
@@ -97,6 +102,46 @@ export function createChatRouter(agent: TeacherAgent): Router {
       // Do NOT block — the hardened system prompt handles it. Just log.
     }
 
+    // ── Memory injection (Supabase) ───────────────────────────────────────────
+    const userId = (req as Request & { userId?: string }).userId ?? `anon_${sessionId}`;
+    let enrichedContext = userContext ?? '';
+
+    if (supabaseEnabled()) {
+      await getOrCreateSupabaseSession(userId, sessionId, message);
+
+      const [profile, recentMsgs, memories] = await Promise.all([
+        loadUserProfile(userId),
+        loadRecentMessages(sessionId, 20),
+        getSemanticMemories(userId, message, 5),
+      ]);
+
+      const parts: string[] = [];
+      if (profile) {
+        parts.push(
+          `[User Profile] Name: ${profile.display_name ?? 'Unknown'}` +
+          ` | Level: ${profile.level}` +
+          (profile.goals ? ` | Goals: ${profile.goals}` : '') +
+          (Object.keys(profile.preferences).length
+            ? ` | Preferences: ${JSON.stringify(profile.preferences)}`
+            : ''),
+        );
+      }
+      if (memories.length > 0) {
+        parts.push('[Long-term Memory]\n' + memories.map(m => `• ${m.summary}`).join('\n'));
+      }
+      if (recentMsgs.length > 0) {
+        parts.push(
+          '[Recent Conversation]\n' +
+          recentMsgs.slice(-10).map(m => `${m.role === 'user' ? 'User' : 'Tutor'}: ${m.content.slice(0, 200)}`).join('\n'),
+        );
+      }
+      if (parts.length > 0 && enrichedContext) parts.unshift(enrichedContext);
+      if (parts.length > 0) enrichedContext = parts.join('\n\n');
+
+      // Persist user message immediately
+      await saveMessage(sessionId, 'user', message);
+    }
+
     // ── Streaming path (SSE) ──────────────────────────────────────────────────
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
@@ -104,9 +149,30 @@ export function createChatRouter(agent: TeacherAgent): Router {
       res.setHeader('Connection', 'keep-alive');
       res.flushHeaders();
 
+      let assistantReply = '';
       try {
-        for await (const event of agent.stream(message, mode as TeachMode, sessionId, imageData, focusSourceId, assignedPersona, userContext)) {
+        for await (const event of agent.stream(message, mode as TeachMode, sessionId, imageData, focusSourceId, assignedPersona, enrichedContext)) {
           res.write(`data: ${JSON.stringify(event)}\n\n`);
+          if (event.token) assistantReply += event.token;
+          if (event.cleanText) assistantReply = event.cleanText;
+        }
+        // Persist assistant reply and schedule background memory update
+        if (supabaseEnabled() && assistantReply) {
+          await saveMessage(sessionId, 'assistant', assistantReply);
+          scheduleMemoryUpdate(userId, sessionId,
+            [{ role: 'user', content: message }, { role: 'assistant', content: assistantReply }],
+            async (msgs) => {
+              // Extract memorable facts using a short LLM call
+              const { callLLM } = await import('../models/llmRouter');
+              const raw = await callLLM(
+                'Extract 1-3 short factual statements about the USER from this exchange. ' +
+                'Focus on preferences, goals, knowledge level, topics studied. ' +
+                'Return one fact per line, no bullet points, no preamble.',
+                msgs.map(m => `${m.role}: ${m.content}`).join('\n'),
+                [],
+              );
+              return raw.split('\n').map(l => l.trim()).filter(l => l.length > 10 && l.length < 200);
+            });
         }
       } catch (err) {
         const detail = (err as Error)?.message ?? String(err);

@@ -7,7 +7,9 @@ import { MediaPlayer } from './components/MediaPlayer';
 import { ProgressDashboard } from './components/ProgressDashboard';
 import { LearningRoadmap } from './components/LearningRoadmap';
 import { SetupGuide } from './components/SetupGuide';
+import { AuthModal } from './components/AuthModal';
 import { useProgressTracker } from './hooks/useProgressTracker';
+import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { UserProfile } from './components/UserProfile';
@@ -19,6 +21,7 @@ import { useUserProfile } from './hooks/useUserProfile';
 import { useSessionMemory, SessionSnapshot, deriveTopic } from './hooks/useSessionMemory';
 import { useErrorLog } from './hooks/useErrorLog';
 import { getHealth, LLMProvider } from './lib/api';
+import { supabaseEnabled } from './lib/supabase';
 
 const App: React.FC = () => {
   const { dark, toggle } = useDarkMode();
@@ -27,7 +30,9 @@ const App: React.FC = () => {
   const [activeProvider, setActiveProvider] = useState<LLMProvider>('claude');
   const [mediaUrl, setMediaUrl]       = useState<string | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showSetup, setShowSetup]     = useState(false);
+  const [showSetup,   setShowSetup]   = useState(false);
+  const [showAuth,    setShowAuth]    = useState(false);
+  const { user } = useSupabaseAuth();
 
   // Show setup guide if backend is unreachable on first load
   useEffect(() => {
@@ -62,6 +67,7 @@ const App: React.FC = () => {
       {showSetup && (
         <SetupGuide onDismiss={() => { setShowSetup(false); sessionStorage.setItem('setup-dismissed', '1'); }} />
       )}
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
       {/* Header */}
       <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 sm:px-6 py-3 flex items-center gap-3 shadow-sm">
 
@@ -105,6 +111,21 @@ const App: React.FC = () => {
           <span className="hidden sm:inline-flex items-center gap-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2.5 py-1 rounded-full font-medium">
             6 Modes
           </span>
+          {/* Auth button */}
+          {supabaseEnabled() && (
+            <button
+              onClick={() => setShowAuth(true)}
+              title={user ? `Signed in as ${user.email}` : 'Sign in to sync memory'}
+              className={`hidden sm:flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                user
+                  ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
+              }`}
+            >
+              <span>{user ? '✓' : '👤'}</span>
+              <span>{user ? 'Synced' : 'Sign in'}</span>
+            </button>
+          )}
           <ThemeToggle dark={dark} onToggle={toggle} />
         </div>
       </header>
