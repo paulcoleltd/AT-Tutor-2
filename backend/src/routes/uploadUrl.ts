@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { lookup } from 'dns/promises';
 // pdf-parse v2 ships no usable TS types; require+cast is the safe path.
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
 const PDFParse = require('pdf-parse') as new (opts: { data: Uint8Array }) => { getText(): Promise<{ text: string }> };
@@ -70,6 +71,22 @@ export function createUploadUrlRouter(store: VectorStore): Router {
 
       if (BLOCKED.some(r => r.test(hostname))) {
         res.status(400).json({ error: 'Private/internal URLs are not allowed.' });
+        return;
+      }
+
+      // CWE-918 DNS rebinding: resolve the hostname now and validate resolved IPs.
+      // A regex check on the hostname alone can be bypassed if the attacker
+      // changes the DNS record between our check and the actual fetch.
+      try {
+        const records = await lookup(hostname, { all: true });
+        for (const { address } of records) {
+          if (BLOCKED.some(r => r.test(address))) {
+            res.status(400).json({ error: 'URL resolves to a private/internal IP address.' });
+            return;
+          }
+        }
+      } catch {
+        res.status(400).json({ error: 'Could not resolve hostname.' });
         return;
       }
     } catch {

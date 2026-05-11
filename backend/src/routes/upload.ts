@@ -48,6 +48,10 @@ const ALL_EXTENSIONS = new Set([
   ...TEXT_EXTENSIONS, ...IMAGE_EXTENSIONS, ...AUDIO_EXTENSIONS, ...VIDEO_EXTENSIONS,
 ]);
 
+// CWE-434: Explicitly block archives — a zip bomb (40 MB → 500 GB decompressed)
+// would bypass the file size limit which applies only to compressed size.
+const BLOCKED_EXTENSIONS = new Set(['.zip', '.tar', '.gz', '.bz2', '.7z', '.rar', '.xz', '.lz']);
+
 const DANGEROUS_MIMES = new Set([
   'text/javascript', 'application/javascript', 'application/x-javascript',
   'application/x-executable', 'application/x-msdownload', 'application/x-sh',
@@ -68,6 +72,10 @@ export function createUploadRouter(store: VectorStore): Router {
     limits:  { fileSize: (CONFIG.maxFileSizeMb || 50) * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
       const ext = '.' + (file.originalname.split('.').pop()?.toLowerCase() ?? '');
+      if (BLOCKED_EXTENSIONS.has(ext)) {
+        cb(new Error('Archive files are not allowed (zip bomb prevention).'));
+        return;
+      }
       if (DANGEROUS_MIMES.has(file.mimetype)) {
         cb(new Error(`File type not allowed.`));
         return;

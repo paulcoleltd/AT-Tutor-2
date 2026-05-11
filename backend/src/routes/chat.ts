@@ -118,7 +118,14 @@ export function createChatRouter(agent: TeacherAgent): Router {
 
     // ── Memory injection (Supabase) ───────────────────────────────────────────
     const userId = (req as Request & { userId?: string }).userId ?? `anon_${sessionId}`;
-    let enrichedContext = userContext ?? '';
+    // CWE-94: Strip injection keywords from client-supplied userContext.
+    // This does not prevent all prompt injection but raises the bar.
+    const sanitiseInput = (s: string) => s
+      .replace(/[\[\]<>{}]/g, ' ')
+      .replace(/\b(ignore|disregard|override|forget|system|instruction|prompt)\b/gi, '[redacted]')
+      .slice(0, 500)
+      .trim();
+    let enrichedContext = userContext ? sanitiseInput(userContext) : '';
 
     if (supabaseEnabled()) {
       await getOrCreateSupabaseSession(userId, sessionId, message);
@@ -226,12 +233,24 @@ export function createChatRouter(agent: TeacherAgent): Router {
     }
   });
 
-  // Reset a specific session
+  // Reset a specific session — MUST belong to the calling user (T1531: prevents
+  // unauthenticated deletion of another user's history)
   router.delete('/history/:sessionId', (req: Request, res: Response): void => {
     const { sessionId } = req.params;
     const VALID_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!sessionId || (sessionId !== ANONYMOUS_SESSION && !VALID_UUID.test(sessionId))) {
       res.status(400).json({ error: 'Invalid sessionId.' });
+      return;
+    }
+    // Enforce ownership: sessionId must match the caller's session or anonymous session
+    const callerId = (req as Request & { userId?: string }).userId;
+    const callerSession = req.body?.callerSessionId as string | undefined;
+    if (
+      sessionId !== ANONYMOUS_SESSION &&
+      callerSession !== sessionId &&
+      !sessionId.startsWith(callerId ?? '__none__')
+    ) {
+      res.status(403).json({ error: 'You do not have permission to delete this session.' });
       return;
     }
     agent.resetSession(sessionId);
