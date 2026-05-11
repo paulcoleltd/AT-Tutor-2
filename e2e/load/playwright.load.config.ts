@@ -20,10 +20,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 const profile  = process.env.LOAD_PROFILE ?? 'light';
 const workers  = parseInt(process.env.LOAD_WORKERS ?? '0') ||
-  { baseline: 1, light: 5, normal: 20, peak: 50, spike: 80 }[profile as string] ?? 5;
+  ({ baseline: 1, light: 5, normal: 20, peak: 50, spike: 80 }[profile as string] ?? 5);
 
 export default defineConfig({
-  testDir:       './e2e/load',
+  testDir:       '.',   // relative to this config file (already in e2e/load/)
   testMatch:     '**/load.spec.ts',
   timeout:       120_000,   // 2 min per test — AI responses can be slow
   expect:        { timeout: 60_000 },
