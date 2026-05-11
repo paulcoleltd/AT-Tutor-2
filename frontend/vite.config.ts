@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 // ── Security: only VITE_API_URL is intentionally exposed to the client bundle.
 // Any other VITE_* variable would be a misconfiguration — this plugin warns
 // at build time if a sensitive-looking variable name is exposed.
-const SAFE_VITE_VARS = new Set(['VITE_API_URL']);
+const SAFE_VITE_VARS = new Set(['VITE_API_URL', 'VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY']);
 
 function secretScanPlugin() {
   return {
