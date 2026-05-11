@@ -3,7 +3,12 @@
   "private": true,
   "scripts": {
     "build": "cd frontend && npm install && npm run build",
-    "dev": "cd frontend && npm run dev"
+    "dev": "cd frontend && npm run dev",
+    "load:baseline": "LOAD_PROFILE=baseline npx playwright test --config=e2e/load/playwright.load.config.ts",
+    "load:light":    "LOAD_PROFILE=light    npx playwright test --config=e2e/load/playwright.load.config.ts",
+    "load:normal":   "LOAD_PROFILE=normal   npx playwright test --config=e2e/load/playwright.load.config.ts",
+    "load:peak":     "LOAD_PROFILE=peak     npx playwright test --config=e2e/load/playwright.load.config.ts",
+    "load:spike":    "LOAD_PROFILE=spike    npx playwright test --config=e2e/load/playwright.load.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
