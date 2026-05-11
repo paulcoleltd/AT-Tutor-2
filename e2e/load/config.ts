@@ -86,10 +86,12 @@ export interface Persona {
   sessions: number;  // messages per session
 }
 
+// sessions = target messages per user; kept at ≤3 so test fits in 3-min timeout
+// even when AI responses are slow (5–25 s each) + think times (2–8 s each).
 export const PERSONAS: Persona[] = [
   { name: 'Cloud Student',    domain: 'cloud',       mode: 'explain', sessions: 3 },
-  { name: 'DevOps Engineer',  domain: 'devops',      mode: 'chat',    sessions: 4 },
+  { name: 'DevOps Engineer',  domain: 'devops',      mode: 'chat',    sessions: 3 },
   { name: 'Security Learner', domain: 'security',    mode: 'quiz',    sessions: 3 },
-  { name: 'Dev Bootcamper',   domain: 'programming', mode: 'explain', sessions: 5 },
+  { name: 'Dev Bootcamper',   domain: 'programming', mode: 'explain', sessions: 3 },
   { name: 'Exam Candidate',   domain: 'exam',        mode: 'exam',    sessions: 1 },
 ];

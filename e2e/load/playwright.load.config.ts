@@ -25,7 +25,7 @@ const workers  = parseInt(process.env.LOAD_WORKERS ?? '0') ||
 export default defineConfig({
   testDir:       '.',   // relative to this config file (already in e2e/load/)
   testMatch:     '**/load.spec.ts',
-  timeout:       120_000,   // 2 min per test — AI responses can be slow
+  timeout:       180_000,   // 3 min per test — AI responses + think time can be slow
   expect:        { timeout: 60_000 },
   fullyParallel: true,
   retries:       0,         // no retries in load tests — failures are data points

@@ -1,0 +1,122 @@
+{
+  "profile": "light",
+  "totalWorkers": 4,
+  "totalRequests": 21,
+  "passedRequests": 21,
+  "failedRequests": 0,
+  "timeoutRequests": 0,
+  "errorRate": "0.0%",
+  "p50Ms": 2874,
+  "p90Ms": 14528,
+  "p95Ms": 15777,
+  "p99Ms": 21351,
+  "avgMs": 6154,
+  "minMs": 69,
+  "maxMs": 21351,
+  "throughputRps": "0.24",
+  "totalDurationMs": 88494,
+  "byLabel": {
+    "page_load": {
+      "count": 4,
+      "p50": 1284,
+      "p90": 1821,
+      "errors": 0
+    },
+    "select_mode_exam": {
+      "count": 1,
+      "p50": 136,
+      "p90": 136,
+      "errors": 0
+    },
+    "send_message_test me on cloud computing bas…": {
+      "count": 1,
+      "p50": 2276,
+      "p90": 2276,
+      "errors": 0
+    },
+    "select_mode_explain": {
+      "count": 1,
+      "p50": 69,
+      "p90": 69,
+      "errors": 0
+    },
+    "send_message_What is the difference between…": {
+      "count": 2,
+      "p50": 15777,
+      "p90": 15777,
+      "errors": 0
+    },
+    "send_message_Explain Azure Virtual Machines…": {
+      "count": 1,
+      "p50": 11932,
+      "p90": 11932,
+      "errors": 0
+    },
+    "send_message_What is the CAP theorem and ho…": {
+      "count": 1,
+      "p50": 21351,
+      "p90": 21351,
+      "errors": 0
+    },
+    "select_mode_quiz": {
+      "count": 1,
+      "p50": 150,
+      "p90": 150,
+      "errors": 0
+    },
+    "send_message_What is zero-trust security ar…": {
+      "count": 1,
+      "p50": 2874,
+      "p90": 2874,
+      "errors": 0
+    },
+    "send_message_Explain common OWASP Top 10 vu…": {
+      "count": 1,
+      "p50": 7045,
+      "p90": 7045,
+      "errors": 0
+    },
+    "send_message_How does OAuth 2.0 work?": {
+      "count": 1,
+      "p50": 6370,
+      "p90": 6370,
+      "errors": 0
+    },
+    "select_mode_chat": {
+      "count": 1,
+      "p50": 94,
+      "p90": 94,
+      "errors": 0
+    },
+    "send_message_What is CI/CD and why is it im…": {
+      "count": 1,
+      "p50": 3167,
+      "p90": 3167,
+      "errors": 0
+    },
+    "send_message_Explain the difference between…": {
+      "count": 1,
+      "p50": 8476,
+      "p90": 8476,
+      "errors": 0
+    },
+    "send_message_How does Kubernetes manage con…": {
+      "count": 1,
+      "p50": 13363,
+      "p90": 13363,
+      "errors": 0
+    },
+    "send_message_What is infrastructure as code…": {
+      "count": 1,
+      "p50": 13762,
+      "p90": 13762,
+      "errors": 0
+    },
+    "send_message_Explain blue-green deployments": {
+      "count": 1,
+      "p50": 14528,
+      "p90": 14528,
+      "errors": 0
+    }
+  }
+}

@@ -1,0 +1,819 @@
+{
+  "config": {
+    "configFile": "C:\\Users\\Dell\\AI Tutor Agent\\e2e\\load\\playwright.load.config.ts",
+    "rootDir": "C:/Users/Dell/AI Tutor Agent/e2e/load",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 5
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/Dell/AI Tutor Agent/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "load-chromium",
+        "name": "load-chromium",
+        "testDir": "C:/Users/Dell/AI Tutor Agent/e2e/load",
+        "testIgnore": [],
+        "testMatch": [
+          "**/load.spec.ts"
+        ],
+        "timeout": 120000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "html",
+        {
+          "outputFolder": "e2e/load/report",
+          "open": "never"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "e2e/load/playwright-results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.59.1",
+    "workers": 5,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "load.spec.ts",
+      "file": "load.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Load Test — light (5 users)",
+          "file": "load.spec.ts",
+          "line": 29,
+          "column": 6,
+          "specs": [
+            {
+              "title": "Virtual user 1 — Cloud Student",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "load-chromium",
+                  "projectName": "load-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 55693,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  LOAD TEST RESULTS — LIGHT profile\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Virtual users    : 2\n"
+                        },
+                        {
+                          "text": "  Total requests   : 8\n"
+                        },
+                        {
+                          "text": "  ✅ Passed        : 8\n"
+                        },
+                        {
+                          "text": "  ❌ Failed        : 0\n"
+                        },
+                        {
+                          "text": "  ⏱  Timed out    : 0\n"
+                        },
+                        {
+                          "text": "  Error rate       : 0.0%\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Latency (ms)\n"
+                        },
+                        {
+                          "text": "    min  : 69\n"
+                        },
+                        {
+                          "text": "    avg  : 5185\n"
+                        },
+                        {
+                          "text": "    p50  : 2276\n"
+                        },
+                        {
+                          "text": "    p90  : 21351\n"
+                        },
+                        {
+                          "text": "    p95  : 21351\n"
+                        },
+                        {
+                          "text": "    p99  : 21351\n"
+                        },
+                        {
+                          "text": "    max  : 21351\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Throughput       : 0.15 req/s\n"
+                        },
+                        {
+                          "text": "  Total duration   : 54.6 s\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  By endpoint:\n"
+                        },
+                        {
+                          "text": "    page_load                                count=2  p50=1821ms  p90=1821ms\n"
+                        },
+                        {
+                          "text": "    select_mode_exam                         count=1  p50=136ms  p90=136ms\n"
+                        },
+                        {
+                          "text": "    send_message_test me on cloud computing bas… count=1  p50=2276ms  p90=2276ms\n"
+                        },
+                        {
+                          "text": "    select_mode_explain                      count=1  p50=69ms  p90=69ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is the difference between… count=1  p50=2607ms  p90=2607ms\n"
+                        },
+                        {
+                          "text": "    send_message_Explain Azure Virtual Machines… count=1  p50=11932ms  p90=11932ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is the CAP theorem and ho… count=1  p50=21351ms  p90=21351ms\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-11T14:57:15.609Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6c11b6bd77859154ad3f-188c4c673b4f7c26e683",
+              "file": "load.spec.ts",
+              "line": 43,
+              "column": 9
+            },
+            {
+              "title": "Virtual user 2 — DevOps Engineer",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "load-chromium",
+                  "projectName": "load-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 92245,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  LOAD TEST RESULTS — LIGHT profile\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Virtual users    : 4\n"
+                        },
+                        {
+                          "text": "  Total requests   : 21\n"
+                        },
+                        {
+                          "text": "  ✅ Passed        : 21\n"
+                        },
+                        {
+                          "text": "  ❌ Failed        : 0\n"
+                        },
+                        {
+                          "text": "  ⏱  Timed out    : 0\n"
+                        },
+                        {
+                          "text": "  Error rate       : 0.0%\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Latency (ms)\n"
+                        },
+                        {
+                          "text": "    min  : 69\n"
+                        },
+                        {
+                          "text": "    avg  : 6154\n"
+                        },
+                        {
+                          "text": "    p50  : 2874\n"
+                        },
+                        {
+                          "text": "    p90  : 14528\n"
+                        },
+                        {
+                          "text": "    p95  : 15777\n"
+                        },
+                        {
+                          "text": "    p99  : 21351\n"
+                        },
+                        {
+                          "text": "    max  : 21351\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Throughput       : 0.24 req/s\n"
+                        },
+                        {
+                          "text": "  Total duration   : 88.5 s\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  By endpoint:\n"
+                        },
+                        {
+                          "text": "    page_load                                count=4  p50=1284ms  p90=1821ms\n"
+                        },
+                        {
+                          "text": "    select_mode_exam                         count=1  p50=136ms  p90=136ms\n"
+                        },
+                        {
+                          "text": "    send_message_test me on cloud computing bas… count=1  p50=2276ms  p90=2276ms\n"
+                        },
+                        {
+                          "text": "    select_mode_explain                      count=1  p50=69ms  p90=69ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is the difference between… count=2  p50=15777ms  p90=15777ms\n"
+                        },
+                        {
+                          "text": "    send_message_Explain Azure Virtual Machines… count=1  p50=11932ms  p90=11932ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is the CAP theorem and ho… count=1  p50=21351ms  p90=21351ms\n"
+                        },
+                        {
+                          "text": "    select_mode_quiz                         count=1  p50=150ms  p90=150ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is zero-trust security ar… count=1  p50=2874ms  p90=2874ms\n"
+                        },
+                        {
+                          "text": "    send_message_Explain common OWASP Top 10 vu… count=1  p50=7045ms  p90=7045ms\n"
+                        },
+                        {
+                          "text": "    send_message_How does OAuth 2.0 work?    count=1  p50=6370ms  p90=6370ms\n"
+                        },
+                        {
+                          "text": "    select_mode_chat                         count=1  p50=94ms  p90=94ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is CI/CD and why is it im… count=1  p50=3167ms  p90=3167ms\n"
+                        },
+                        {
+                          "text": "    send_message_Explain the difference between… count=1  p50=8476ms  p90=8476ms\n"
+                        },
+                        {
+                          "text": "    send_message_How does Kubernetes manage con… count=1  p50=13363ms  p90=13363ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is infrastructure as code… count=1  p50=13762ms  p90=13762ms\n"
+                        },
+                        {
+                          "text": "    send_message_Explain blue-green deployments count=1  p50=14528ms  p90=14528ms\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-11T14:57:15.780Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6c11b6bd77859154ad3f-2e7d375cbcfe76bb1453",
+              "file": "load.spec.ts",
+              "line": 43,
+              "column": 9
+            },
+            {
+              "title": "Virtual user 3 — Security Learner",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "load-chromium",
+                  "projectName": "load-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 62296,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  LOAD TEST RESULTS — LIGHT profile\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Virtual users    : 3\n"
+                        },
+                        {
+                          "text": "  Total requests   : 14\n"
+                        },
+                        {
+                          "text": "  ✅ Passed        : 14\n"
+                        },
+                        {
+                          "text": "  ❌ Failed        : 0\n"
+                        },
+                        {
+                          "text": "  ⏱  Timed out    : 0\n"
+                        },
+                        {
+                          "text": "  Error rate       : 0.0%\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Latency (ms)\n"
+                        },
+                        {
+                          "text": "    min  : 69\n"
+                        },
+                        {
+                          "text": "    avg  : 5354\n"
+                        },
+                        {
+                          "text": "    p50  : 2607\n"
+                        },
+                        {
+                          "text": "    p90  : 15777\n"
+                        },
+                        {
+                          "text": "    p95  : 21351\n"
+                        },
+                        {
+                          "text": "    p99  : 21351\n"
+                        },
+                        {
+                          "text": "    max  : 21351\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Throughput       : 0.25 req/s\n"
+                        },
+                        {
+                          "text": "  Total duration   : 56.1 s\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  By endpoint:\n"
+                        },
+                        {
+                          "text": "    page_load                                count=3  p50=1284ms  p90=1821ms\n"
+                        },
+                        {
+                          "text": "    select_mode_exam                         count=1  p50=136ms  p90=136ms\n"
+                        },
+                        {
+                          "text": "    send_message_test me on cloud computing bas… count=1  p50=2276ms  p90=2276ms\n"
+                        },
+                        {
+                          "text": "    select_mode_explain                      count=1  p50=69ms  p90=69ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is the difference between… count=2  p50=15777ms  p90=15777ms\n"
+                        },
+                        {
+                          "text": "    send_message_Explain Azure Virtual Machines… count=1  p50=11932ms  p90=11932ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is the CAP theorem and ho… count=1  p50=21351ms  p90=21351ms\n"
+                        },
+                        {
+                          "text": "    select_mode_quiz                         count=1  p50=150ms  p90=150ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is zero-trust security ar… count=1  p50=2874ms  p90=2874ms\n"
+                        },
+                        {
+                          "text": "    send_message_Explain common OWASP Top 10 vu… count=1  p50=7045ms  p90=7045ms\n"
+                        },
+                        {
+                          "text": "    send_message_How does OAuth 2.0 work?    count=1  p50=6370ms  p90=6370ms\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-11T14:57:15.899Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6c11b6bd77859154ad3f-31fbc8a90ed5fd618825",
+              "file": "load.spec.ts",
+              "line": 43,
+              "column": 9
+            },
+            {
+              "title": "Virtual user 4 — Dev Bootcamper",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "load-chromium",
+                  "projectName": "load-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "timedOut",
+                      "duration": 120434,
+                      "error": {
+                        "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m",
+                        "stack": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                      },
+                      "errors": [
+                        {
+                          "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "\n────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  LOAD TEST RESULTS — LIGHT profile\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Virtual users    : 4\n"
+                        },
+                        {
+                          "text": "  Total requests   : 21\n"
+                        },
+                        {
+                          "text": "  ✅ Passed        : 21\n"
+                        },
+                        {
+                          "text": "  ❌ Failed        : 0\n"
+                        },
+                        {
+                          "text": "  ⏱  Timed out    : 0\n"
+                        },
+                        {
+                          "text": "  Error rate       : 0.0%\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Latency (ms)\n"
+                        },
+                        {
+                          "text": "    min  : 69\n"
+                        },
+                        {
+                          "text": "    avg  : 6154\n"
+                        },
+                        {
+                          "text": "    p50  : 2874\n"
+                        },
+                        {
+                          "text": "    p90  : 14528\n"
+                        },
+                        {
+                          "text": "    p95  : 15777\n"
+                        },
+                        {
+                          "text": "    p99  : 21351\n"
+                        },
+                        {
+                          "text": "    max  : 21351\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Throughput       : 0.24 req/s\n"
+                        },
+                        {
+                          "text": "  Total duration   : 88.5 s\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  By endpoint:\n"
+                        },
+                        {
+                          "text": "    page_load                                count=4  p50=1284ms  p90=1821ms\n"
+                        },
+                        {
+                          "text": "    select_mode_exam                         count=1  p50=136ms  p90=136ms\n"
+                        },
+                        {
+                          "text": "    send_message_test me on cloud computing bas… count=1  p50=2276ms  p90=2276ms\n"
+                        },
+                        {
+                          "text": "    select_mode_explain                      count=1  p50=69ms  p90=69ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is the difference between… count=2  p50=15777ms  p90=15777ms\n"
+                        },
+                        {
+                          "text": "    send_message_Explain Azure Virtual Machines… count=1  p50=11932ms  p90=11932ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is the CAP theorem and ho… count=1  p50=21351ms  p90=21351ms\n"
+                        },
+                        {
+                          "text": "    select_mode_quiz                         count=1  p50=150ms  p90=150ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is zero-trust security ar… count=1  p50=2874ms  p90=2874ms\n"
+                        },
+                        {
+                          "text": "    send_message_Explain common OWASP Top 10 vu… count=1  p50=7045ms  p90=7045ms\n"
+                        },
+                        {
+                          "text": "    send_message_How does OAuth 2.0 work?    count=1  p50=6370ms  p90=6370ms\n"
+                        },
+                        {
+                          "text": "    select_mode_chat                         count=1  p50=94ms  p90=94ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is CI/CD and why is it im… count=1  p50=3167ms  p90=3167ms\n"
+                        },
+                        {
+                          "text": "    send_message_Explain the difference between… count=1  p50=8476ms  p90=8476ms\n"
+                        },
+                        {
+                          "text": "    send_message_How does Kubernetes manage con… count=1  p50=13363ms  p90=13363ms\n"
+                        },
+                        {
+                          "text": "    send_message_What is infrastructure as code… count=1  p50=13762ms  p90=13762ms\n"
+                        },
+                        {
+                          "text": "    send_message_Explain blue-green deployments count=1  p50=14528ms  p90=14528ms\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-11T14:57:16.035Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\Dell\\AI Tutor Agent\\test-results\\load-Load-Test-—-light-5-u-714e4-ual-user-4-—-Dev-Bootcamper-load-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\Dell\\AI Tutor Agent\\test-results\\load-Load-Test-—-light-5-u-714e4-ual-user-4-—-Dev-Bootcamper-load-chromium\\error-context.md"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\Dell\\AI Tutor Agent\\test-results\\load-Load-Test-—-light-5-u-714e4-ual-user-4-—-Dev-Bootcamper-load-chromium\\error-context.md"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "6c11b6bd77859154ad3f-52df372aff58efc18e4f",
+              "file": "load.spec.ts",
+              "line": 43,
+              "column": 9
+            },
+            {
+              "title": "Virtual user 5 — Exam Candidate",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "load-chromium",
+                  "projectName": "load-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 4,
+                      "parallelIndex": 4,
+                      "status": "passed",
+                      "duration": 31917,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  LOAD TEST RESULTS — LIGHT profile\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Virtual users    : 1\n"
+                        },
+                        {
+                          "text": "  Total requests   : 3\n"
+                        },
+                        {
+                          "text": "  ✅ Passed        : 3\n"
+                        },
+                        {
+                          "text": "  ❌ Failed        : 0\n"
+                        },
+                        {
+                          "text": "  ⏱  Timed out    : 0\n"
+                        },
+                        {
+                          "text": "  Error rate       : 0.0%\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Latency (ms)\n"
+                        },
+                        {
+                          "text": "    min  : 136\n"
+                        },
+                        {
+                          "text": "    avg  : 1411\n"
+                        },
+                        {
+                          "text": "    p50  : 1821\n"
+                        },
+                        {
+                          "text": "    p90  : 2276\n"
+                        },
+                        {
+                          "text": "    p95  : 2276\n"
+                        },
+                        {
+                          "text": "    p99  : 2276\n"
+                        },
+                        {
+                          "text": "    max  : 2276\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  Throughput       : 0.14 req/s\n"
+                        },
+                        {
+                          "text": "  Total duration   : 21.4 s\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n"
+                        },
+                        {
+                          "text": "  By endpoint:\n"
+                        },
+                        {
+                          "text": "    page_load                                count=1  p50=1821ms  p90=1821ms\n"
+                        },
+                        {
+                          "text": "    select_mode_exam                         count=1  p50=136ms  p90=136ms\n"
+                        },
+                        {
+                          "text": "    send_message_test me on cloud computing bas… count=1  p50=2276ms  p90=2276ms\n"
+                        },
+                        {
+                          "text": "────────────────────────────────────────────────────────────\n\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-11T14:57:15.522Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "6c11b6bd77859154ad3f-7298804793783837c345",
+              "file": "load.spec.ts",
+              "line": 43,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-05-11T14:57:09.563Z",
+    "duration": 128993.485,
+    "expected": 4,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

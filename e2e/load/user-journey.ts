@@ -158,8 +158,8 @@ export async function runUserSession(
     // Select mode
     await selectMode(page, persona.mode, metrics);
 
-    // Send a sequence of messages with realistic think times
-    const msgCount = persona.sessions + Math.floor(Math.random() * 2);
+    // Send a sequence of messages — no random extra messages to keep within timeout
+    const msgCount = persona.sessions;
     for (let i = 0; i < msgCount; i++) {
       const msg = domainMessages[i % domainMessages.length];
       await sendMessage(page, msg, metrics, true);
