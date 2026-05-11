@@ -72,14 +72,35 @@ export async function callLLM(system: string, user: string, history: Message[]):
   throw new LLMError(`All configured providers failed: ${errors.join(' | ')}`, getActiveProvider());
 }
 
+// ── Concurrency limiter ───────────────────────────────────────────────────────
+// Caps simultaneous in-flight LLM calls. Under heavy load, excess requests
+// wait here rather than all hitting the API at once (which causes 60–120s
+// queue build-up and cascading timeouts at 50+ concurrent users).
+const MAX_CONCURRENT_LLM = parseInt(process.env.MAX_CONCURRENT_LLM || '8', 10);
+let _activeLLM = 0;
+const _waitQueue: Array<() => void> = [];
+
+async function acquireLLMSlot(): Promise<void> {
+  if (_activeLLM < MAX_CONCURRENT_LLM) { _activeLLM++; return; }
+  await new Promise<void>(resolve => _waitQueue.push(resolve));
+  _activeLLM++;
+}
+function releaseLLMSlot(): void {
+  _activeLLM = Math.max(0, _activeLLM - 1);
+  const next = _waitQueue.shift();
+  if (next) next();
+}
+
 // ── Streaming — yields token chunks ──────────────────────────────────────────
 export async function* streamLLM(
   system: string, user: string, history: Message[]
 ): AsyncGenerator<string, void, unknown> {
+  await acquireLLMSlot();
   const providers = getProviderFallbackOrder();
   let lastError: Error | null = null;
 
-  for (const provider of providers) {
+  try {
+   for (const provider of providers) {
     try {
       yield* streamProvider(provider, system, user, history);
       return;
@@ -107,6 +128,9 @@ export async function* streamLLM(
       }
       throw providerErr;
     }
+   }
+  } finally {
+    releaseLLMSlot();
   }
 
   throw lastError instanceof LLMError

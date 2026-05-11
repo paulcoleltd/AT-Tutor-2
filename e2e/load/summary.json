@@ -1,122 +1,128 @@
 {
-  "profile": "light",
-  "totalWorkers": 4,
-  "totalRequests": 21,
-  "passedRequests": 21,
-  "failedRequests": 0,
+  "profile": "peak",
+  "totalWorkers": 32,
+  "totalRequests": 158,
+  "passedRequests": 149,
+  "failedRequests": 9,
   "timeoutRequests": 0,
-  "errorRate": "0.0%",
-  "p50Ms": 2874,
-  "p90Ms": 14528,
-  "p95Ms": 15777,
-  "p99Ms": 21351,
-  "avgMs": 6154,
-  "minMs": 69,
-  "maxMs": 21351,
-  "throughputRps": "0.24",
-  "totalDurationMs": 88494,
+  "errorRate": "5.7%",
+  "p50Ms": 6031,
+  "p90Ms": 73203,
+  "p95Ms": 78496,
+  "p99Ms": 126184,
+  "avgMs": 22489,
+  "minMs": 2,
+  "maxMs": 146409,
+  "throughputRps": "0.86",
+  "totalDurationMs": 183237,
   "byLabel": {
     "page_load": {
-      "count": 4,
-      "p50": 1284,
-      "p90": 1821,
+      "count": 32,
+      "p50": 6862,
+      "p90": 12645,
       "errors": 0
     },
     "select_mode_exam": {
-      "count": 1,
-      "p50": 136,
-      "p90": 136,
+      "count": 5,
+      "p50": 838,
+      "p90": 3003,
       "errors": 0
     },
     "send_message_test me on cloud computing bas…": {
-      "count": 1,
-      "p50": 2276,
-      "p90": 2276,
-      "errors": 0
-    },
-    "select_mode_explain": {
-      "count": 1,
-      "p50": 69,
-      "p90": 69,
-      "errors": 0
-    },
-    "send_message_What is the difference between…": {
-      "count": 2,
-      "p50": 15777,
-      "p90": 15777,
-      "errors": 0
-    },
-    "send_message_Explain Azure Virtual Machines…": {
-      "count": 1,
-      "p50": 11932,
-      "p90": 11932,
-      "errors": 0
-    },
-    "send_message_What is the CAP theorem and ho…": {
-      "count": 1,
-      "p50": 21351,
-      "p90": 21351,
+      "count": 5,
+      "p50": 9220,
+      "p90": 47232,
       "errors": 0
     },
     "select_mode_quiz": {
-      "count": 1,
-      "p50": 150,
-      "p90": 150,
+      "count": 12,
+      "p50": 298,
+      "p90": 886,
       "errors": 0
     },
     "send_message_What is zero-trust security ar…": {
-      "count": 1,
-      "p50": 2874,
-      "p90": 2874,
+      "count": 8,
+      "p50": 27235,
+      "p90": 44799,
       "errors": 0
     },
     "send_message_Explain common OWASP Top 10 vu…": {
-      "count": 1,
-      "p50": 7045,
-      "p90": 7045,
+      "count": 8,
+      "p50": 66368,
+      "p90": 78496,
       "errors": 0
     },
-    "send_message_How does OAuth 2.0 work?": {
-      "count": 1,
-      "p50": 6370,
-      "p90": 6370,
+    "send_message_What is the difference between…": {
+      "count": 22,
+      "p50": 49333,
+      "p90": 80546,
       "errors": 0
     },
     "select_mode_chat": {
-      "count": 1,
-      "p50": 94,
-      "p90": 94,
+      "count": 5,
+      "p50": 241,
+      "p90": 489,
       "errors": 0
     },
     "send_message_What is CI/CD and why is it im…": {
-      "count": 1,
-      "p50": 3167,
-      "p90": 3167,
+      "count": 5,
+      "p50": 37036,
+      "p90": 114834,
       "errors": 0
     },
     "send_message_Explain the difference between…": {
-      "count": 1,
-      "p50": 8476,
-      "p90": 8476,
+      "count": 5,
+      "p50": 36218,
+      "p90": 74639,
       "errors": 0
     },
     "send_message_How does Kubernetes manage con…": {
-      "count": 1,
-      "p50": 13363,
-      "p90": 13363,
+      "count": 5,
+      "p50": 57927,
+      "p90": 76045,
+      "errors": 2
+    },
+    "select_mode_explain": {
+      "count": 14,
+      "p50": 257,
+      "p90": 653,
       "errors": 0
     },
-    "send_message_What is infrastructure as code…": {
-      "count": 1,
-      "p50": 13762,
-      "p90": 13762,
+    "send_message_Explain async/await in JavaScr…": {
+      "count": 7,
+      "p50": 3662,
+      "p90": 48760,
       "errors": 0
     },
-    "send_message_Explain blue-green deployments": {
-      "count": 1,
-      "p50": 14528,
-      "p90": 14528,
+    "send_message_How does garbage collection wo…": {
+      "count": 7,
+      "p50": 51723,
+      "p90": 64720,
+      "errors": 1
+    },
+    "send_message_Explain Azure Virtual Machines…": {
+      "count": 7,
+      "p50": 73887,
+      "p90": 146409,
       "errors": 0
+    },
+    "send_message_What is the CAP theorem and ho…": {
+      "count": 7,
+      "p50": 51484,
+      "p90": 126184,
+      "errors": 2
+    },
+    "send_message_quiz me on What is the differe…": {
+      "count": 3,
+      "p50": 5,
+      "p90": 13,
+      "errors": 3
+    },
+    "send_message_quiz me on Explain async/await…": {
+      "count": 1,
+      "p50": 17,
+      "p90": 17,
+      "errors": 1
     }
   }
 }

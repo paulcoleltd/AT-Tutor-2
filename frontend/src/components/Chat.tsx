@@ -674,6 +674,17 @@ export const Chat: React.FC<Props> = ({
       for await (const event of streamMessage(userText, replyMode, sessId, abort.signal, image, activeFocusId, personaOverride ?? resolvedPersona, userContext)) {
         if (event.error)   { throw new Error(event.error); }
         if (event.sources) { sources = event.sources; }
+        // Heartbeat: server sends this while queued behind concurrency limiter.
+        // Show a friendly "still working" message so the user knows we're alive.
+        if ((event as Record<string, unknown>).heartbeat) {
+          const waitS = Math.round(((event as Record<string, unknown>).waitingMs as number ?? 0) / 1000);
+          setMessages(prev => prev.map(m =>
+            m.id === placeholder.id
+              ? { ...m, content: `⏳ Still processing your request… (${waitS}s)`, streaming: true }
+              : m,
+          ));
+          continue;
+        }
         if (event.token) {
           fullContent += event.token;
           setMessages(prev => prev.map(m =>

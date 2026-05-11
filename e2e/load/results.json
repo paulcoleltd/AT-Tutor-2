@@ -1,156 +1,47 @@
 [
   {
-    "persona": "Exam Candidate",
-    "userId": "user-5",
-    "metrics": [
-      {
-        "label": "page_load",
-        "startMs": 1778511447794,
-        "durationMs": 1821,
-        "status": "pass"
-      },
-      {
-        "label": "select_mode_exam",
-        "startMs": 1778511450286,
-        "durationMs": 136,
-        "status": "pass"
-      },
-      {
-        "label": "send_message_test me on cloud computing bas…",
-        "startMs": 1778511451070,
-        "durationMs": 2276,
-        "status": "pass"
-      }
-    ],
-    "sessionMs": 21391
-  },
-  {
-    "persona": "Cloud Student",
-    "userId": "user-1",
-    "metrics": [
-      {
-        "label": "page_load",
-        "startMs": 1778511439379,
-        "durationMs": 1284,
-        "status": "pass"
-      },
-      {
-        "label": "select_mode_explain",
-        "startMs": 1778511441701,
-        "durationMs": 69,
-        "status": "pass"
-      },
-      {
-        "label": "send_message_What is the difference between…",
-        "startMs": 1778511442335,
-        "durationMs": 2607,
-        "status": "pass"
-      },
-      {
-        "label": "send_message_Explain Azure Virtual Machines…",
-        "startMs": 1778511449896,
-        "durationMs": 11932,
-        "status": "pass"
-      },
-      {
-        "label": "send_message_What is the CAP theorem and ho…",
-        "startMs": 1778511468257,
-        "durationMs": 21351,
-        "status": "pass"
-      }
-    ],
-    "sessionMs": 54589
-  },
-  {
     "persona": "Security Learner",
-    "userId": "user-3",
+    "userId": "user-43",
     "metrics": [
       {
         "label": "page_load",
-        "startMs": 1778511444130,
-        "durationMs": 1269,
-        "status": "pass"
+        "startMs": 1778523042936,
+        "durationMs": 25801,
+        "status": "timeout",
+        "errorMsg": "page.waitForSelector: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('textarea, input[type=\"text\"]') to be visible\u001b[22m\n"
       },
       {
         "label": "select_mode_quiz",
-        "startMs": 1778511446587,
-        "durationMs": 150,
+        "startMs": 1778523115272,
+        "durationMs": 552,
         "status": "pass"
       },
       {
         "label": "send_message_What is zero-trust security ar…",
-        "startMs": 1778511447353,
-        "durationMs": 2874,
+        "startMs": 1778523116484,
+        "durationMs": 30973,
         "status": "pass"
       },
       {
         "label": "send_message_Explain common OWASP Top 10 vu…",
-        "startMs": 1778511456647,
-        "durationMs": 7045,
+        "startMs": 1778523152011,
+        "durationMs": 10922,
         "status": "pass"
       },
       {
         "label": "send_message_What is the difference between…",
-        "startMs": 1778511470467,
-        "durationMs": 15777,
-        "status": "pass"
-      },
-      {
-        "label": "send_message_How does OAuth 2.0 work?",
-        "startMs": 1778511491341,
-        "durationMs": 6370,
-        "status": "pass"
+        "startMs": 1778523170034,
+        "durationMs": 5,
+        "status": "fail",
+        "errorMsg": "locator.fill: Target page, context or browser has been closed"
       }
     ],
-    "sessionMs": 56083
-  },
-  {
-    "persona": "DevOps Engineer",
-    "userId": "user-2",
-    "metrics": [
-      {
-        "label": "page_load",
-        "startMs": 1778511441022,
-        "durationMs": 884,
-        "status": "pass"
-      },
-      {
-        "label": "select_mode_chat",
-        "startMs": 1778511443205,
-        "durationMs": 94,
-        "status": "pass"
-      },
-      {
-        "label": "send_message_What is CI/CD and why is it im…",
-        "startMs": 1778511444042,
-        "durationMs": 3167,
-        "status": "pass"
-      },
-      {
-        "label": "send_message_Explain the difference between…",
-        "startMs": 1778511456082,
-        "durationMs": 8476,
-        "status": "pass"
-      },
-      {
-        "label": "send_message_How does Kubernetes manage con…",
-        "startMs": 1778511471262,
-        "durationMs": 13363,
-        "status": "pass"
-      },
-      {
-        "label": "send_message_What is infrastructure as code…",
-        "startMs": 1778511491278,
-        "durationMs": 13762,
-        "status": "pass"
-      },
-      {
-        "label": "send_message_Explain blue-green deployments",
-        "startMs": 1778511511268,
-        "durationMs": 14528,
-        "status": "pass"
+    "sessionMs": 129983
+  }
+],
+        "errorMsg": "locator.fill: Target page, context or browser has been closed"
       }
     ],
-    "sessionMs": 88494
+    "sessionMs": 144649
   }
 ]

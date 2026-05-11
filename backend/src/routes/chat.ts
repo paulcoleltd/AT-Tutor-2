@@ -179,9 +179,22 @@ export function createChatRouter(agent: TeacherAgent): Router {
       res.setHeader('Connection', 'keep-alive');
       res.flushHeaders();
 
+      // Heartbeat: send a keep-alive comment every 8 s while waiting for an LLM slot.
+      // This prevents the client from showing a blank frozen screen under high load
+      // when requests are queued behind the concurrency limiter.
+      let heartbeatCount = 0;
+      const heartbeat = setInterval(() => {
+        heartbeatCount++;
+        if (heartbeatCount <= 10) { // max 80 s of heartbeats
+          res.write(`data: ${JSON.stringify({ heartbeat: true, waitingMs: heartbeatCount * 8000 })}\n\n`);
+        }
+      }, 8_000);
+
       let assistantReply = '';
+      let firstToken = false;
       try {
         for await (const event of agent.stream(message, mode as TeachMode, sessionId, imageData, focusSourceId, assignedPersona, enrichedContext)) {
+          if (!firstToken && event.token) { firstToken = true; clearInterval(heartbeat); }
           res.write(`data: ${JSON.stringify(event)}\n\n`);
           if (event.token) assistantReply += event.token;
           if (event.cleanText) assistantReply = event.cleanText;
@@ -205,6 +218,7 @@ export function createChatRouter(agent: TeacherAgent): Router {
             });
         }
       } catch (err) {
+        clearInterval(heartbeat);
         const detail = (err as Error)?.message ?? String(err);
         if (err instanceof LLMError) console.error(`[chat] LLM stream error (${err.provider}): ${detail}`);
         else console.error('[chat] Unexpected stream error:', detail);
@@ -213,6 +227,7 @@ export function createChatRouter(agent: TeacherAgent): Router {
           : 'An unexpected error occurred.';
         res.write(`data: ${JSON.stringify({ error: errMsg })}\n\n`);
       } finally {
+        clearInterval(heartbeat);
         res.end();
       }
       return;

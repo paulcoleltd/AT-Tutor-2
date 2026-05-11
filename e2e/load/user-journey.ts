@@ -59,9 +59,12 @@ export async function selectMode(
       summarize: 'Summarize', exam: 'Exam', flashcard: 'Flashcards',
     };
     const label = modeLabels[mode] ?? 'Explain';
+    // Wait for the mode buttons to appear before clicking (fixes 0ms failures under peak load)
+    await page.waitForSelector(`button:has-text("${label}")`, { timeout: 15_000 }).catch(() => {});
     const btn = page.locator(`button:has-text("${label}")`).first();
     if (await btn.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await btn.click();
+      await page.waitForTimeout(400); // allow UI to reflect mode switch before next action
     }
   });
   await sleep(THINK.modeSwitch());
