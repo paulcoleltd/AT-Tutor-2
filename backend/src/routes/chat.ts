@@ -96,6 +96,17 @@ export function createChatRouter(agent: TeacherAgent): Router {
     const imageData = imageBase64 && imageMimeType ? { base64: imageBase64, mimeType: imageMimeType } : undefined;
     const assignedPersona = persona?.trim() || 'AI Tutor';
 
+    // ── Streaming: flush headers immediately so Railway proxy never 502 on timeout ─
+    // Railway (and many reverse proxies) will return 502 if no response headers arrive
+    // within their timeout window. For SSE we must send headers before any async work.
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no'); // disable Nginx buffering (Railway/Render)
+      res.flushHeaders();
+    }
+
     // ── Audit: session rate limiting & abuse detection ────────────────────────
     if (!checkSessionRate(sessionId)) {
       console.log(JSON.stringify({ ts: new Date().toISOString(), event: 'audit:rate_exceeded', sessionId }));
@@ -173,11 +184,8 @@ export function createChatRouter(agent: TeacherAgent): Router {
     }
 
     // ── Streaming path (SSE) ──────────────────────────────────────────────────
+    // Note: headers already flushed above (before async work) to prevent Railway 502.
     if (stream) {
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.flushHeaders();
 
       // Heartbeat: send a keep-alive comment every 8 s while waiting for an LLM slot.
       // This prevents the client from showing a blank frozen screen under high load
