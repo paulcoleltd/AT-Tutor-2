@@ -102,6 +102,9 @@ export function getDb(): SqliteDb {
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
     db.exec(SCHEMA);
+    // Runtime smoke test — catches native binary crashes that escape the load-time
+    // try/catch (e.g. better-sqlite3 on Railway Linux before prebuilt binary fix).
+    db.prepare('SELECT 1').get();
     _db = db;
     return _db;
   } catch {
@@ -111,6 +114,7 @@ export function getDb(): SqliteDb {
         const db = new DatabaseCtor(dbPath);
         db.pragma('foreign_keys = ON');
         db.exec(SCHEMA);
+        db.prepare('SELECT 1').get(); // runtime smoke test
         _db = db;
         if (dbPath !== ':memory:') {
           console.warn(`[db] Using ${dbPath} (ephemeral — data lost on cold start)`);

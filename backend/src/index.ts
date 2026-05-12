@@ -3,6 +3,19 @@ import fs   from 'fs';
 import express from 'express';
 import { createApp } from './app';
 
+// ── Process-level crash guards ────────────────────────────────────────────────
+// Prevent the Node.js process from dying on unhandled async rejections or
+// uncaught exceptions (e.g. native-binary crashes from better-sqlite3 or
+// Anthropic SDK stream errors that escape the async generator boundary).
+// Without these, Railway/Render restart the container and all in-flight SSE
+// connections are killed, appearing as HTTP 502 to the client.
+process.on('uncaughtException', (err) => {
+  console.error('[process] Uncaught exception (kept alive):', err?.message ?? err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[process] Unhandled rejection (kept alive):', reason);
+});
+
 const { app } = createApp();
 
 // Serve the React build as static files when it exists.
