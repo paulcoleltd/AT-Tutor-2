@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import { streamMessage, clearHistory, speakWithAI, setProvider, uploadUrl, webSearch, getSessionMessages, TeachMode, LLMProvider, ImageAttachment, SessionMeta } from '../lib/api';
+import { prepareForSpeech } from '../lib/emojiToSpeech';
 import { profileToContext } from '../hooks/useUserProfile';
 import { VoiceControls } from './VoiceControls';
 import { SessionHistory } from './SessionHistory';
@@ -181,11 +182,12 @@ const ActionToolbar: React.FC<ToolbarProps> = ({ msg, isLast, isLoading, onDelet
       return;
     }
     setSpeaking(true);
+    const speechText = prepareForSpeech(msg.content);
     try {
-      await speakWithAI(msg.content);
+      await speakWithAI(speechText);
     } catch {
       if (window.speechSynthesis) {
-        const u = new SpeechSynthesisUtterance(msg.content.replace(/[#*`_~[\]]/g, ''));
+        const u = new SpeechSynthesisUtterance(speechText);
         u.rate = 0.95;
         u.onend = () => setSpeaking(false);
         window.speechSynthesis.cancel();

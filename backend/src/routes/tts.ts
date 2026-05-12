@@ -2,6 +2,39 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { CONFIG } from '../config';
 
+// Emoji → natural speech word map (semantic meaning, not Unicode name)
+const EMOJI_SPEECH: Record<string, string> = {
+  '👋': 'hello', '🤝': 'great', '👏': 'well done', '👍': 'great', '👎': 'not quite',
+  '🙌': 'excellent', '😊': '', '😄': '', '🤔': 'hmm', '🥳': 'congrats',
+  '🎓': '', '📚': '', '📖': '', '📝': '', '💡': 'tip', '🔑': 'key point',
+  '🎯': 'goal', '🏆': 'achievement', '⭐': '', '🌟': '', '✨': '',
+  '✅': 'correct', '❌': 'incorrect', '⚠️': 'warning', '❓': '',
+  '✔️': 'correct', '❎': 'incorrect', '🟢': 'pass', '🔴': 'fail',
+  '🚀': '', '💪': 'great effort', '🔥': '', '🎉': 'congrats',
+  '🏁': 'done', '🔍': '', '📊': '', '📈': '', '📉': '',
+  '📄': '', '📃': '', '⏱️': '', '⏰': '',
+};
+const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F000}-\u{1FFFF}\u{200D}\u{20E3}]+/gu;
+
+function prepareForSpeechBackend(text: string): string {
+  let s = text;
+  for (const [emoji, word] of Object.entries(EMOJI_SPEECH)) {
+    if (s.includes(emoji)) s = s.split(emoji).join(word ? ` ${word} ` : ' ');
+  }
+  return s
+    .replace(EMOJI_RE, ' ')
+    .replace(/#{1,6}\s/g, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/`{1,3}[^`]*`{1,3}/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^[-*>]\s/gm, '')
+    .replace(/\n{2,}/g, '. ')
+    .replace(/\n/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 const TTS_VOICES = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] as const;
 
 const TtsBodySchema = z.object({
@@ -25,17 +58,8 @@ export function createTtsRouter(): Router {
     }
 
     const { text, voice } = parsed.data;
-    // Strip markdown so it sounds natural when spoken
-    const clean = text
-      .replace(/#{1,6}\s/g, '')
-      .replace(/\*\*(.+?)\*\*/g, '$1')
-      .replace(/\*(.+?)\*/g, '$1')
-      .replace(/`{1,3}[^`]*`{1,3}/g, '')
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .replace(/^[-*>]\s/gm, '')
-      .replace(/\n{2,}/g, '. ')
-      .replace(/\n/g, ' ')
-      .trim();
+    // Convert emoji to natural speech words, then strip markdown
+    const clean = prepareForSpeechBackend(text);
 
     // Abort upstream fetch if client disconnects — avoids wasting OpenAI billing
     const abort = new AbortController();
