@@ -165,7 +165,7 @@ export class TeacherAgent {
     private readonly memory:   MemoryManager,
   ) {}
 
-  async ask(userText: string, mode: TeachMode = 'explain', sessionId: string, persona?: string, userContext?: string): Promise<TeachResponse> {
+  async ask(userText: string, mode: TeachMode = 'explain', sessionId: string, persona?: string, userContext?: string, clientHistory?: Array<{ role: string; content: string }>): Promise<TeachResponse> {
     if (!userText?.trim()) throw new Error('TeacherAgent.ask: userText must not be empty.');
 
     const { chunks, sources } = await this.brain.retrieve(userText);
@@ -173,9 +173,12 @@ export class TeacherAgent {
       ? chunks.join('\n\n---\n\n')
       : '(No documents uploaded yet. Answer from general knowledge.)';
 
-    const instruction   = MODE_INSTRUCTIONS[mode] ?? MODE_INSTRUCTIONS.explain;
-    const userPrompt    = buildPrompt(contextStr, instruction, userText, persona, userContext);
-    const history       = this.sessions.getHistory(sessionId);
+    const instruction    = MODE_INSTRUCTIONS[mode] ?? MODE_INSTRUCTIONS.explain;
+    const userPrompt     = buildPrompt(contextStr, instruction, userText, persona, userContext);
+    const backendHistory = this.sessions.getHistory(sessionId);
+    const history: Message[] = backendHistory.length > 0
+      ? backendHistory
+      : (clientHistory ?? []).filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
     const memoryBlock   = this.memory.buildMemoryBlock(sessionId);
     const cert          = mode === 'exam' ? detectCertInText(userText) : null;
     const certBlock     = cert ? buildCertContext(cert) : '';
@@ -206,7 +209,7 @@ export class TeacherAgent {
     return { answer, sources };
   }
 
-  async *stream(userText: string, mode: TeachMode = 'explain', sessionId: string, imageData?: ImageData, focusSourceId?: string, persona?: string, userContext?: string): AsyncGenerator<{ token?: string; sources?: string[]; done?: boolean; cleanText?: string; examResult?: { score: number; total: number; grade: string; improvements: string[] } }> {
+  async *stream(userText: string, mode: TeachMode = 'explain', sessionId: string, imageData?: ImageData, focusSourceId?: string, persona?: string, userContext?: string, clientHistory?: Array<{ role: string; content: string }>): AsyncGenerator<{ token?: string; sources?: string[]; done?: boolean; cleanText?: string; examResult?: { score: number; total: number; grade: string; improvements: string[] } }> {
     if (!userText?.trim()) throw new Error('TeacherAgent.stream: userText must not be empty.');
 
     const { chunks, sources, focusSourceHit }: RetrievalResult = await this.brain.retrieve(userText, undefined, focusSourceId);
@@ -221,7 +224,15 @@ export class TeacherAgent {
 
     const instruction   = MODE_INSTRUCTIONS[mode] ?? MODE_INSTRUCTIONS.explain;
     const userPrompt    = buildPrompt(contextStr, instruction, userText, persona, userContext);
-    const history       = this.sessions.getHistory(sessionId);
+    // Use backend session history if available (persistent servers: Railway, Render, local).
+    // Fall back to client-provided history for serverless deployments (Vercel) where the
+    // in-memory SQLite session store is empty on every cold start.
+    const backendHistory = this.sessions.getHistory(sessionId);
+    const history: Message[] = backendHistory.length > 0
+      ? backendHistory
+      : (clientHistory ?? [])
+          .filter(m => m.role === 'user' || m.role === 'assistant')
+          .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
     const memoryBlock   = this.memory.buildMemoryBlock(sessionId);
     const cert          = mode === 'exam' ? detectCertInText(userText) : null;
     const certBlock     = cert ? buildCertContext(cert) : '';

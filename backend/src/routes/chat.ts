@@ -215,7 +215,7 @@ export function createChatRouter(agent: TeacherAgent): Router {
       let assistantReply = '';
       let firstToken = false;
       try {
-        for await (const event of agent.stream(message, mode as TeachMode, sessionId, imageData, focusSourceId, assignedPersona, enrichedContext)) {
+        for await (const event of agent.stream(message, mode as TeachMode, sessionId, imageData, focusSourceId, assignedPersona, enrichedContext, clientHistory)) {
           if (!firstToken && event.token) { firstToken = true; clearInterval(heartbeat); }
           res.write(`data: ${JSON.stringify(event)}\n\n`);
           if (event.token) assistantReply += event.token;
@@ -257,7 +257,7 @@ export function createChatRouter(agent: TeacherAgent): Router {
 
     // ── Non-streaming path ────────────────────────────────────────────────────
     try {
-      const result = await agent.ask(message, mode as TeachMode, sessionId, assignedPersona, userContext);
+      const result = await agent.ask(message, mode as TeachMode, sessionId, assignedPersona, userContext, clientHistory);
       res.status(200).json(result);
     } catch (err) {
       if (err instanceof LLMError) {
