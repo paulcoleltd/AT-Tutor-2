@@ -108,19 +108,26 @@ export async function sendMessage(message: string, mode: TeachMode, sessionId: s
 
 export interface ImageAttachment { base64: string; mimeType: string; name: string; }
 
+export interface ClientHistoryMessage { role: 'user' | 'assistant'; content: string; }
+
 export async function* streamMessage(
   message: string, mode: TeachMode, sessionId: string,
   signal?: AbortSignal,
   image?: ImageAttachment,
   focusSourceId?: string,
   persona?: string,
-  userContext?: string,   // serialised user profile + session memory context
+  userContext?: string,        // serialised user profile + session memory context
+  clientHistory?: ClientHistoryMessage[], // local chat history for serverless hydration
 ): AsyncGenerator<StreamEvent> {
   const safePersona = persona?.trim().slice(0, 80);
   const body: Record<string, unknown> = { message, mode, sessionId, stream: true, persona: safePersona };
-  if (image)       { body.imageBase64 = image.base64; body.imageMimeType = image.mimeType; }
+  if (image)         { body.imageBase64 = image.base64; body.imageMimeType = image.mimeType; }
   if (focusSourceId) { body.focusSourceId = focusSourceId; }
   if (userContext)   { body.userContext = userContext.slice(0, 2000); }
+  // Send last 40 messages so backend can restore multi-turn context on serverless
+  if (clientHistory && clientHistory.length > 0) {
+    body.clientHistory = clientHistory.slice(-40);
+  }
   const res = await fetch(`${BASE_URL}/chat`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },

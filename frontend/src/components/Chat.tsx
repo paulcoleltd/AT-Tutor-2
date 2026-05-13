@@ -668,12 +668,32 @@ export const Chat: React.FC<Props> = ({
 
       // explicitFocusId takes precedence over state (avoids stale closure after setFocusSourceId)
       const activeFocusId = explicitFocusId ?? focusSourceId;
-      // Build personalisation context: user profile + session memory resume context
-      const profileCtx  = userProfile ? profileToContext(userProfile) : '';
+      // Build personalisation context: user profile + session memory resume context.
+      // Always read profile fresh from localStorage so changes made via the Profile
+      // panel are picked up without needing a page reload.
+      const freshProfile = (() => {
+        try { const raw = localStorage.getItem('ai-tutor-user-profile'); return raw ? JSON.parse(raw) : null; } catch { return null; }
+      })();
+      const profileCtx  = profileToContext(freshProfile ?? userProfile ?? { name:'', expertiseLevel:'intermediate', background:'', learningGoals:'', subjects:'', preferredStyle:'', notes:'' });
       const resumeCtx   = buildResumeContext ? buildResumeContext(sessId) : '';
       const userContext = [profileCtx, resumeCtx].filter(Boolean).join('\n\n') || undefined;
 
-      for await (const event of streamMessage(userText, replyMode, sessId, abort.signal, image, activeFocusId, personaOverride ?? resolvedPersona, userContext)) {
+      // Read local chat history to hydrate backend session on serverless deployments.
+      // This preserves multi-turn context even when the backend has no persistent memory.
+      const localHistory: import('../lib/api').ClientHistoryMessage[] = (() => {
+        try {
+          const raw = localStorage.getItem(`ai-tutor-chat-${sessId}`);
+          if (!raw) return [];
+          const all: Array<{ role: string; content: string }> = JSON.parse(raw);
+          // Only include completed user+assistant pairs (exclude the current user message)
+          return all
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .slice(0, -1) // exclude the last message (current user msg not yet answered)
+            .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+        } catch { return []; }
+      })();
+
+      for await (const event of streamMessage(userText, replyMode, sessId, abort.signal, image, activeFocusId, personaOverride ?? resolvedPersona, userContext, localHistory)) {
         if (event.error)   { throw new Error(event.error); }
         if (event.sources) { sources = event.sources; }
         // Heartbeat: server sends this while queued behind concurrency limiter.

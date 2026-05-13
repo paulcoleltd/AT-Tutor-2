@@ -22,6 +22,12 @@ const ChatBodySchema = z.object({
   focusSourceId:  z.string().uuid().optional(),
   // User profile + session memory injected by the client — prepended to system context
   userContext:    z.string().max(2000).optional(),
+  // Client-side chat history — used when backend session store is empty (serverless cold starts,
+  // Vercel deployments with ephemeral memory, etc.). Capped at 40 turns to keep prompts lean.
+  clientHistory:  z.array(z.object({
+    role:    z.enum(['user', 'assistant']),
+    content: z.string().max(4000),
+  })).max(40).optional(),
 }).superRefine((data, ctx) => {
   if ((data.imageBase64 && !data.imageMimeType) || (!data.imageBase64 && data.imageMimeType)) {
     ctx.addIssue({
@@ -92,9 +98,17 @@ export function createChatRouter(agent: TeacherAgent): Router {
       return;
     }
 
-    const { message, mode, persona, sessionId = ANONYMOUS_SESSION, stream, imageBase64, imageMimeType, focusSourceId, userContext } = parsed.data;
+    const { message, mode, persona, sessionId = ANONYMOUS_SESSION, stream, imageBase64, imageMimeType, focusSourceId, userContext, clientHistory } = parsed.data;
     const imageData = imageBase64 && imageMimeType ? { base64: imageBase64, mimeType: imageMimeType } : undefined;
     const assignedPersona = persona?.trim() || 'AI Tutor';
+
+    // ── Client-history hydration ───────────────────────────────────────────────
+    // On Vercel serverless and Railway cold starts the in-memory SessionStore is
+    // empty for every new invocation. If the client sends its localStorage history
+    // we seed the backend session so multi-turn context is preserved.
+    if (clientHistory && clientHistory.length > 0) {
+      agent.hydrateHistory(sessionId, clientHistory);
+    }
 
     // ── Streaming: flush headers immediately so Railway proxy never 502 on timeout ─
     // Railway (and many reverse proxies) will return 502 if no response headers arrive

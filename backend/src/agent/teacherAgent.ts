@@ -264,6 +264,28 @@ export class TeacherAgent {
   resetSession(sessionId: string): void {
     this.sessions.clearSession(sessionId);
   }
+
+  /**
+   * Seed the backend SessionStore from client-provided history.
+   * Called when the backend session is empty (serverless cold start, Vercel, etc.)
+   * so multi-turn context is preserved without requiring persistent storage.
+   * Only seeds if the session has NO existing messages (avoids duplicates).
+   */
+  hydrateHistory(sessionId: string, clientHistory: Array<{ role: string; content: string }>): void {
+    const existing = this.sessions.getHistory(sessionId);
+    if (existing.length > 0) return; // already has history — don't overwrite
+    // Replay the history pairs into the session store.
+    // We process in pairs (user + assistant) to match appendMessages signature.
+    for (let i = 0; i < clientHistory.length - 1; i += 2) {
+      const userMsg = clientHistory[i];
+      const aiMsg   = clientHistory[i + 1];
+      if (userMsg?.role === 'user' && aiMsg?.role === 'assistant') {
+        this.sessions.appendMessages(sessionId, userMsg.content, aiMsg.content);
+      }
+    }
+    // If there's an odd trailing user message (in-flight), skip it — the current
+    // request IS that user message and will be appended after the AI responds.
+  }
 }
 
 function buildCertContext(cert: Certification): string {
