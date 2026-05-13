@@ -419,9 +419,11 @@ interface Props {
   onNavigateMedia?: (url: string) => void;
   onKbRefresh?: () => void;
   // Memory & profile
-  userProfile?:       import('../hooks/useUserProfile').UserProfile;
-  onSaveSnapshot?:    (snap: any) => void;
-  buildResumeContext?: (sessionId: string) => string;
+  userProfile?:          import('../hooks/useUserProfile').UserProfile;
+  onSaveSnapshot?:       (snap: any) => void;
+  buildResumeContext?:   (sessionId: string) => string;
+  memoryBankContext?:    string;   // long-term facts from useMemoryBank
+  onLearnFromMessage?:   (message: string, sessionId: string) => void;
   // Error logging
   onLogError?: (source: string, message: string, detail?: string) => void;
   onLogWarn?:  (source: string, message: string) => void;
@@ -434,6 +436,7 @@ interface Props {
 export const Chat: React.FC<Props> = ({
   sessionId, onSessionReset, onSessionResume, onProviderSwitch, onNavigateMedia, onKbRefresh,
   userProfile, onSaveSnapshot, buildResumeContext,
+  memoryBankContext, onLearnFromMessage,
   onLogError, onLogWarn, onLogInfo,
   onLogMessage, onLogSession,
 }) => {
@@ -676,7 +679,11 @@ export const Chat: React.FC<Props> = ({
       })();
       const profileCtx  = profileToContext(freshProfile ?? userProfile ?? { name:'', expertiseLevel:'intermediate', background:'', learningGoals:'', subjects:'', preferredStyle:'', notes:'' });
       const resumeCtx   = buildResumeContext ? buildResumeContext(sessId) : '';
-      const userContext = [profileCtx, resumeCtx].filter(Boolean).join('\n\n') || undefined;
+      // Include long-term memory bank facts so the AI knows the user across sessions
+      const userContext = [profileCtx, resumeCtx, memoryBankContext].filter(Boolean).join('\n\n') || undefined;
+
+      // Learn from this message — extract and store any memorable facts
+      if (onLearnFromMessage) onLearnFromMessage(userText, sessId);
 
       // Read local chat history to hydrate backend session on serverless deployments.
       // This preserves multi-turn context even when the backend has no persistent memory.

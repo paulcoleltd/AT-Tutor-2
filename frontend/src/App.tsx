@@ -20,6 +20,8 @@ import { useSession } from './hooks/useSession';
 import { useUserProfile } from './hooks/useUserProfile';
 import { useSessionMemory, SessionSnapshot, deriveTopic } from './hooks/useSessionMemory';
 import { useErrorLog } from './hooks/useErrorLog';
+import { useMemoryBank } from './hooks/useMemoryBank';
+import { MemoryBank } from './components/MemoryBank';
 import { getHealth, LLMProvider } from './lib/api';
 import { supabaseEnabled } from './lib/supabase';
 
@@ -45,6 +47,7 @@ const App: React.FC = () => {
   // ── New feature hooks ──────────────────────────────────────────────────────
   const profileHook    = useUserProfile();
   const memoryHook     = useSessionMemory();
+  const memoryBankHook = useMemoryBank();
   const errorLogHook   = useErrorLog();
   const progressHook   = useProgressTracker();
 
@@ -171,6 +174,16 @@ const App: React.FC = () => {
             <UserProfile />
           </ErrorBoundary>
 
+          {/* Long-term Memory Bank */}
+          <ErrorBoundary>
+            <MemoryBank
+              facts={memoryBankHook.facts}
+              hasMemory={memoryBankHook.hasMemory}
+              onDelete={memoryBankHook.deleteFact}
+              onClear={memoryBankHook.clearAll}
+            />
+          </ErrorBoundary>
+
           {/* Session Memory */}
           <ErrorBoundary>
             <SessionMemory
@@ -276,6 +289,8 @@ const App: React.FC = () => {
               userProfile={profileHook.profile}
               onSaveSnapshot={handleSaveSnapshot}
               buildResumeContext={memoryHook.buildResumeContext}
+              memoryBankContext={memoryBankHook.contextBlock}
+              onLearnFromMessage={memoryBankHook.learnFromMessage}
               onLogError={(source, msg, detail) => errorLogHook.log('error', source, msg, detail)}
               onLogWarn={(source, msg) => errorLogHook.log('warn', source, msg)}
               onLogInfo={(source, msg) => errorLogHook.log('info', source, msg)}
