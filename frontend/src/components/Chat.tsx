@@ -685,10 +685,12 @@ export const Chat: React.FC<Props> = ({
           const raw = localStorage.getItem(`ai-tutor-chat-${sessId}`);
           if (!raw) return [];
           const all: Array<{ role: string; content: string }> = JSON.parse(raw);
-          // Only include completed user+assistant pairs (exclude the current user message)
+          // Send full history. The current user message is added to React state
+          // before this runs (for optimistic UI) but localStorage is updated by
+          // useEffect AFTER render — so the current message is NOT yet in raw.
+          // hydrateHistory on the backend skips orphaned trailing user messages anyway.
           return all
             .filter(m => m.role === 'user' || m.role === 'assistant')
-            .slice(0, -1) // exclude the last message (current user msg not yet answered)
             .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
         } catch { return []; }
       })();

@@ -274,17 +274,27 @@ export class TeacherAgent {
   hydrateHistory(sessionId: string, clientHistory: Array<{ role: string; content: string }>): void {
     const existing = this.sessions.getHistory(sessionId);
     if (existing.length > 0) return; // already has history — don't overwrite
-    // Replay the history pairs into the session store.
-    // We process in pairs (user + assistant) to match appendMessages signature.
-    for (let i = 0; i < clientHistory.length - 1; i += 2) {
-      const userMsg = clientHistory[i];
-      const aiMsg   = clientHistory[i + 1];
-      if (userMsg?.role === 'user' && aiMsg?.role === 'assistant') {
-        this.sessions.appendMessages(sessionId, userMsg.content, aiMsg.content);
+
+    // Walk the history linearly looking for adjacent (user → assistant) pairs.
+    // We must NOT assume pairs start at even indices because localStorage history
+    // begins with the AI's welcome message (assistant at index 0), which shifts
+    // every pair off by one. This logic is alignment-safe.
+    let i = 0;
+    while (i < clientHistory.length) {
+      if (clientHistory[i].role === 'user') {
+        const userMsg = clientHistory[i];
+        const next    = clientHistory[i + 1];
+        if (next?.role === 'assistant') {
+          // Valid pair — seed both into the session store
+          this.sessions.appendMessages(sessionId, userMsg.content, next.content);
+          i += 2; // advance past both
+        } else {
+          i++; // orphaned user msg at end — skip (it's the in-flight message)
+        }
+      } else {
+        i++; // skip leading / orphaned assistant messages (e.g. welcome message)
       }
     }
-    // If there's an odd trailing user message (in-flight), skip it — the current
-    // request IS that user message and will be appended after the AI responds.
   }
 }
 
