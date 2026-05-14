@@ -52,12 +52,12 @@ jest.mock('../brain/ingest', () => ({
   ingestDocument: jest.fn().mockResolvedValue({ chunksAdded: 3 }),
 }));
 
-// ─── Mock: pdf-parse v2 class-based API ──────────────────────────────────────
-jest.mock('pdf-parse', () => ({
-  PDFParse: jest.fn().mockImplementation(() => ({
-    getText: jest.fn().mockResolvedValue({ text: 'Mock PDF text content for testing.' }),
-  })),
-}));
+// ─── Mock: pdf-parse — returned as constructor (require('pdf-parse') is used directly) ──
+jest.mock('pdf-parse', () => {
+  return jest.fn().mockImplementation(() => ({
+    getText: jest.fn().mockResolvedValue({ text: 'Mock PDF text content for testing purposes.' }),
+  }));
+});
 
 // ─── App import (after env + mocks are set) ───────────────────────────────────
 import { createApp } from '../app';
@@ -84,15 +84,17 @@ describe('GET /api/health', () => {
     expect(res.body.status).toBe('ok');
   });
 
-  it('includes provider, knowledgeBase, sessions, and uptime fields', async () => {
+  it('includes status and knowledgeBase only (minimal disclosure — security hardening)', async () => {
     const res = await request(app).get('/api/health');
-    expect(res.body).toHaveProperty('provider');
-    expect(res.body).toHaveProperty('availableProviders');
+    // After security audit: health endpoint returns only status + knowledgeBase (CWE-200)
+    expect(res.body).toHaveProperty('status');
     expect(res.body).toHaveProperty('knowledgeBase');
-    expect(res.body.knowledgeBase).toHaveProperty('totalChunks');
     expect(res.body.knowledgeBase).toHaveProperty('sourceCount');
-    expect(res.body).toHaveProperty('sessions');
-    expect(res.body).toHaveProperty('uptime');
+    // Must NOT expose sensitive fields
+    expect(res.body).not.toHaveProperty('provider');
+    expect(res.body).not.toHaveProperty('uptime');
+    expect(res.body).not.toHaveProperty('keysConfigured');
+    expect(res.body).not.toHaveProperty('sessions');
   });
 
   it('knowledgeBase.sourceCount is a number', async () => {
@@ -275,11 +277,19 @@ describe('POST /api/chat — successful non-streaming requests', () => {
 describe('DELETE /api/chat/history/:sessionId', () => {
   const app = buildApp();
 
-  it('clears a valid UUID session and returns success', async () => {
+  it('clears a valid UUID session when callerSessionId matches (ownership check)', async () => {
+    // Security fix: DELETE now requires callerSessionId === sessionId in request body
     const res = await request(app)
-      .delete(`/api/chat/history/${VALID_UUID}`);
+      .delete(`/api/chat/history/${VALID_UUID}`)
+      .send({ callerSessionId: VALID_UUID });
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
+  });
+
+  it('returns 403 when callerSessionId is missing (ownership not proven)', async () => {
+    const res = await request(app)
+      .delete(`/api/chat/history/${VALID_UUID}`);
+    expect(res.status).toBe(403);
   });
 
   it('clears the anonymous session', async () => {
@@ -550,10 +560,10 @@ describe('POST /api/tts — validation', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 400 when text exceeds 4096 characters', async () => {
+  it('returns 400 when text exceeds 1200 characters (security: cost abuse limit)', async () => {
     const res = await request(app)
       .post('/api/tts')
-      .send({ text: 'x'.repeat(4097) });
+      .send({ text: 'x'.repeat(1201) });
     expect(res.status).toBe(400);
     expect(res.body.details).toHaveProperty('text');
   });
@@ -586,10 +596,10 @@ describe('POST /api/tts — validation', () => {
     }
   });
 
-  it('accepts text at exactly the 4096-character limit', async () => {
+  it('accepts text at exactly the 1200-character limit', async () => {
     const res = await request(app)
       .post('/api/tts')
-      .send({ text: 'a'.repeat(4096) });
+      .send({ text: 'a'.repeat(1200) });
     // Validation should pass (not 400); upstream TTS will fail — that is fine.
     expect(res.status).not.toBe(400);
   });
