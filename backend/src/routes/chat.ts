@@ -26,8 +26,8 @@ const ChatBodySchema = z.object({
   // Vercel deployments with ephemeral memory, etc.). Capped at 40 turns to keep prompts lean.
   clientHistory:  z.array(z.object({
     role:    z.enum(['user', 'assistant']),
-    content: z.string().max(8000), // raised from 4000 — AI responses can be very long
-  })).max(40).optional(),
+    content: z.string().max(4000), // per-message cap — frontend truncates to 3500
+  })).max(30).optional(), // reduced from 40 — limits token abuse surface
 }).superRefine((data, ctx) => {
   if ((data.imageBase64 && !data.imageMimeType) || (!data.imageBase64 && data.imageMimeType)) {
     ctx.addIssue({
@@ -45,9 +45,12 @@ const ANONYMOUS_SESSION = 'anonymous';
 const ABUSE_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
   { label: 'prompt_injection',    pattern: /ignore\s+(previous|all|your)\s+instructions?|disregard\s+(the\s+)?above|system\s+prompt|you\s+are\s+now\s+(?:an?\s+)?(?:DAN|evil|unrestricted)/i },
   { label: 'jailbreak',           pattern: /act\s+as\s+(?:if\s+you\s+(?:are|were)\s+|an?\s+)?(?:DAN|evil|unfiltered|uncensored|GPT-?4?)\b|developer\s+mode|jailbreak/i },
+  { label: 'roleplay_jailbreak',  pattern: /pretend\s+(you|there)\s+(have|are|is)\s+no\s+(restriction|rule|filter|limit|constraint)/i },
   { label: 'credential_harvest',  pattern: /(?:api\s+key|secret|password|token)\s*(?:is|=|:)\s*[A-Za-z0-9+/]{16,}/i },
-  { label: 'exfiltration_attempt',pattern: /repeat\s+(the\s+)?(?:system\s+)?prompt|print\s+your\s+instructions|reveal\s+your\s+(?:system\s+)?prompt|what\s+(?:are|were)\s+your\s+instructions/i },
-  { label: 'high_volume_detect',  pattern: /.{3500,}/ }, // suspiciously long single message
+  { label: 'exfiltration_attempt',pattern: /repeat\s+(the\s+)?(?:system\s+)?prompt|print\s+your\s+instructions|reveal\s+your\s+(?:system\s+)?prompt|what\s+(?:are|were)\s+your\s+instructions|summarize\s+your\s+(configuration|setup|rules)/i },
+  { label: 'nested_json_inject',  pattern: /"role"\s*:\s*"system"/ },
+  { label: 'unicode_confusable',  pattern: /[！-～‘-‟]/ }, // full-width ASCII + fancy quotes
+  { label: 'high_volume_detect',  pattern: /.{3000,}/ }, // lowered from 3500
 ];
 
 function detectAbuse(message: string): string | null {
@@ -103,12 +106,9 @@ export function createChatRouter(agent: TeacherAgent): Router {
     const assignedPersona = persona?.trim() || 'AI Tutor';
 
     // ── Client-history hydration ───────────────────────────────────────────────
-    // On Vercel serverless and Railway cold starts the in-memory SessionStore is
-    // empty for every new invocation. If the client sends its localStorage history
-    // we seed the backend session so multi-turn context is preserved.
-    if (clientHistory && clientHistory.length > 0) {
-      agent.hydrateHistory(sessionId, clientHistory);
-    }
+    // Declare safeClientHistory here so it is available throughout the handler.
+    // Will be populated below after sanitiseInput is defined.
+    // (Populated after sanitiseInput declaration — see below)
 
     // ── Streaming: flush headers immediately so Railway proxy never 502 on timeout ─
     // Railway (and many reverse proxies) will return 502 if no response headers arrive
@@ -143,13 +143,35 @@ export function createChatRouter(agent: TeacherAgent): Router {
 
     // ── Memory injection (Supabase) ───────────────────────────────────────────
     const userId = (req as Request & { userId?: string }).userId ?? `anon_${sessionId}`;
-    // CWE-94: Strip injection keywords from client-supplied userContext.
-    // This does not prevent all prompt injection but raises the bar.
+    // CWE-94: Strip injection keywords, newlines, and control characters from
+    // client-supplied text before injecting into LLM prompts.
     const sanitiseInput = (s: string) => s
       .replace(/[\[\]<>{}]/g, ' ')
-      .replace(/\b(ignore|disregard|override|forget|system|instruction|prompt)\b/gi, '[redacted]')
+      .replace(/\r?\n/g, ' ')                   // strip newlines — prevent multi-line injection
+      .replace(/\b(ignore|disregard|override|forget|system|instruction|prompt|jailbreak|developer mode)\b/gi, '[redacted]')
+      .replace(/"role"\s*:\s*"system"/gi, '')    // block nested JSON role injection
       .slice(0, 500)
       .trim();
+
+    // Guard: reject requests with excessively large clientHistory (token abuse)
+    const historyTotalChars = (clientHistory ?? []).reduce((s, m) => s + m.content.length, 0);
+    if (historyTotalChars > 60_000) {
+      res.status(400).json({ error: 'Chat history too large. Please start a new session.' });
+      return;
+    }
+
+    // Sanitise clientHistory content before injecting into LLM context (CWE-94)
+    const safeClientHistory = (clientHistory ?? []).map(m => ({
+      role: m.role,
+      content: sanitiseInput(m.content),
+    }));
+
+    // ── Client-history hydration (continued) ─────────────────────────────────
+    // Seed the backend SessionStore from sanitised client history.
+    if (safeClientHistory.length > 0) {
+      agent.hydrateHistory(sessionId, safeClientHistory);
+    }
+
     let enrichedContext = userContext ? sanitiseInput(userContext) : '';
 
     if (supabaseEnabled()) {
@@ -162,8 +184,12 @@ export function createChatRouter(agent: TeacherAgent): Router {
       ]);
 
       // CWE-94: sanitise all DB-sourced text before injecting into LLM prompt.
-      // Strip characters that could break prompt structure or inject instructions.
-      const sanitise = (s: string) => s.replace(/[\[\]<>{}]/g, ' ').slice(0, 300).trim();
+      // Also strips newlines and known injection keywords (strengthened).
+      const sanitise = (s: string) => s
+        .replace(/[\[\]<>{}]/g, ' ')
+        .replace(/\r?\n/g, ' ')
+        .replace(/\b(ignore|disregard|override|system|instruction|prompt)\b/gi, '[redacted]')
+        .slice(0, 300).trim();
 
       const parts: string[] = [];
       if (profile) {
@@ -215,7 +241,7 @@ export function createChatRouter(agent: TeacherAgent): Router {
       let assistantReply = '';
       let firstToken = false;
       try {
-        for await (const event of agent.stream(message, mode as TeachMode, sessionId, imageData, focusSourceId, assignedPersona, enrichedContext, clientHistory)) {
+        for await (const event of agent.stream(message, mode as TeachMode, sessionId, imageData, focusSourceId, assignedPersona, enrichedContext, safeClientHistory)) {
           if (!firstToken && event.token) { firstToken = true; clearInterval(heartbeat); }
           res.write(`data: ${JSON.stringify(event)}\n\n`);
           if (event.token) assistantReply += event.token;
@@ -257,7 +283,9 @@ export function createChatRouter(agent: TeacherAgent): Router {
 
     // ── Non-streaming path ────────────────────────────────────────────────────
     try {
-      const result = await agent.ask(message, mode as TeachMode, sessionId, assignedPersona, userContext, clientHistory);
+      // CRITICAL fix: use enrichedContext (sanitised) not raw userContext — prevents
+      // prompt injection in the non-streaming path (CWE-94)
+      const result = await agent.ask(message, mode as TeachMode, sessionId, assignedPersona, enrichedContext || undefined, safeClientHistory);
       res.status(200).json(result);
     } catch (err) {
       if (err instanceof LLMError) {
@@ -282,10 +310,12 @@ export function createChatRouter(agent: TeacherAgent): Router {
     // Enforce ownership: sessionId must match the caller's session or anonymous session
     const callerId = (req as Request & { userId?: string }).userId;
     const callerSession = req.body?.callerSessionId as string | undefined;
+    // Ownership: caller must prove they own the session by sending its ID back.
+    // The startsWith check was removed — it was never logically valid (UUIDs don't
+    // start with userIds) and created a false sense of security. (CWE-639)
     if (
       sessionId !== ANONYMOUS_SESSION &&
-      callerSession !== sessionId &&
-      !sessionId.startsWith(callerId ?? '__none__')
+      callerSession !== sessionId
     ) {
       res.status(403).json({ error: 'You do not have permission to delete this session.' });
       return;

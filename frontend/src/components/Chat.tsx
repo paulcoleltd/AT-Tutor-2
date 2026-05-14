@@ -29,14 +29,14 @@ function isVideoUrl(url: string): boolean {
 function isAudioUrl(url: string): boolean {
   return /\.(mp3|wav|m4a|ogg|flac|aac)(\?|$)/i.test(url);
 }
+// CWE-20: Allowlist approach — only safe printable chars. Blocklist is bypassable
+// via unicode confusables, full-width chars, and novel injection syntax. (OWASP A03)
 function sanitizePersonaInput(value: string): string {
   return value
-    .replace(/[\r\n]+/g, ' ')
-    .replace(/ASSIGNED ROLE\s*[:]?|INSTRUCTION\s*[:]?|USER SAID\s*[:]?/gi, '')
-    .replace(/[`"'<>]/g, '')
+    .replace(/[^a-zA-Z0-9 \-.,&!?']/g, '') // allowlist only safe chars
     .replace(/\s{2,}/g, ' ')
     .trim()
-    .slice(0, 80);
+    .slice(0, 60); // reduced from 80 — less surface for injection
 }
 export interface Message {
   id:        string;
@@ -49,7 +49,8 @@ export interface Message {
   isError?:  boolean;
 }
 
-function makeId() { return `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
+// CWE-330: use CSPRNG for message IDs — Math.random() is not cryptographically secure
+function makeId() { return crypto.randomUUID(); }
 
 // Kept for the clear-history reset fallback (resolved at call time, not module load)
 const defaultWelcome = () => makeWelcome('AI Tutor');
@@ -357,7 +358,15 @@ const MessageBubble = memo(({ msg, isLastAssistant, isLoading, onDelete, onRegen
 
         {msg.role === 'assistant' ? (
           <div className="prose-chat">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{msg.content}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={MD_COMPONENTS}
+              urlTransform={(url) => {
+                // CWE-79: Block javascript: and data: URLs that AI output could contain
+                if (/^(javascript|data|vbscript):/i.test(url.trim())) return '#';
+                return url;
+              }}
+            >{msg.content}</ReactMarkdown>
             {msg.streaming && <span className="cursor-blink ml-0.5 text-blue-400">▋</span>}
           </div>
         ) : msg.content}

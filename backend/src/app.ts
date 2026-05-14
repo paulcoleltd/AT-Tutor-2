@@ -100,13 +100,11 @@ export function createApp() {
     // CWE-200: Return minimal info publicly. Provider names + key presence
     // are kept for the UI's "No API key" amber warning, but session counts
     // and detailed KB info are removed to reduce reconnaissance surface.
+    // CWE-200: Minimal public health info — no key names, uptime, or provider details
+    // which aid attacker reconnaissance (OWASP A05:2021)
     res.json({
-      status:         anyKey ? 'ok' : 'degraded',
-      provider:       getActiveProvider(),
-      availableProviders: getAvailableProviders(),
-      keysConfigured,
-      knowledgeBase:  { sourceCount: kb.sources.length },
-      uptime:         Math.floor(process.uptime()),
+      status: anyKey ? 'ok' : 'degraded',
+      knowledgeBase: { sourceCount: kb.sources.length },
     });
   });
 

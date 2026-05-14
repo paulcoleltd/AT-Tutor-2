@@ -47,7 +47,7 @@ export async function attachUserId(
     res.cookie(ANON_COOKIE, anonId, {
       httpOnly: true,
       secure:   true,   // Always require HTTPS (CWE-614)
-      sameSite: 'lax',
+      sameSite: 'strict', // upgraded from 'lax' — prevents CSRF via cross-site navigation (CWE-352)
       maxAge:   COOKIE_MAX_AGE * 1000,
     });
   }

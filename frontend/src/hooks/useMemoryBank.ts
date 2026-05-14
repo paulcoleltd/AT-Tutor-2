@@ -59,6 +59,19 @@ const EXTRACTORS: Array<[MemoryCategory, RegExp, (m: RegExpMatchArray) => string
   ['achievement',/i (?:passed|completed|finished|got) (?:my |the )?([a-zA-Z 0-9-]{3,50})/i, m => `User completed ${m[1].trim()}`],
 ];
 
+// CWE-77: Sanitise extracted fact text before storing in memory bank.
+// Prevents adversarial messages from injecting prompt-control sequences that
+// are later re-injected into the LLM context block. (OWASP A03:2021 Injection)
+function sanitiseFactText(text: string): string {
+  return text
+    .replace(/[\[\]<>{}]/g, ' ')              // strip bracket chars used in prompt templates
+    .replace(/\r?\n/g, ' ')                   // collapse newlines
+    .replace(/\b(ignore|disregard|override|system|instruction|prompt|jailbreak)\b/gi, '[redacted]')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .slice(0, 120);                            // tighter limit than full content
+}
+
 /** Extract facts from a single user message. */
 export function extractFacts(
   message: string,
@@ -70,8 +83,9 @@ export function extractFacts(
   for (const [category, pattern, template] of EXTRACTORS) {
     const match = message.match(pattern);
     if (match) {
-      const text = template(match);
-      if (!seen.has(text)) {
+      const raw  = template(match);
+      const text = sanitiseFactText(raw);
+      if (text && !seen.has(text)) {
         seen.add(text);
         facts.push({
           text, category, source: sessionId,
@@ -119,9 +133,8 @@ function persist(facts: MemoryFact[]): void {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(facts)); } catch {}
 }
 
-function uid(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-}
+// CWE-330: use CSPRNG — Math.random() IDs are predictable and guessable
+function uid(): string { return crypto.randomUUID(); }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 export function useMemoryBank() {

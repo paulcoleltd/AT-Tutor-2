@@ -38,7 +38,7 @@ function prepareForSpeechBackend(text: string): string {
 const TTS_VOICES = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] as const;
 
 const TtsBodySchema = z.object({
-  text:  z.string().min(1).max(4096),
+  text:  z.string().min(1).max(1200), // reduced from 4096 — limits cost abuse (CWE-770)
   voice: z.enum(TTS_VOICES).optional().default('nova'),
 });
 

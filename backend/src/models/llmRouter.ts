@@ -78,13 +78,29 @@ export async function callLLM(system: string, user: string, history: Message[]):
 // queue build-up and cascading timeouts at 50+ concurrent users).
 // Vercel Hobby: 8 (serverless, each fn handles 1 req — limits cold starts)
 // Vercel Pro / Railway / Render: 12–20 (persistent server, more headroom)
-const MAX_CONCURRENT_LLM = parseInt(process.env.MAX_CONCURRENT_LLM || '12', 10);
+// Clamp to [1, 50] — prevents DoS via 0/NaN and runaway cost via 999 (CWE-770)
+const MAX_CONCURRENT_LLM = Math.max(1, Math.min(50, parseInt(process.env.MAX_CONCURRENT_LLM || '12', 10)));
+// Max queued requests — beyond this, reject immediately with 503 (CWE-400)
+const MAX_QUEUE_SIZE     = 100;
+// Max wait time in queue before rejecting request
+const QUEUE_TIMEOUT_MS   = 30_000;
+
 let _activeLLM = 0;
 const _waitQueue: Array<() => void> = [];
 
 async function acquireLLMSlot(): Promise<void> {
   if (_activeLLM < MAX_CONCURRENT_LLM) { _activeLLM++; return; }
-  await new Promise<void>(resolve => _waitQueue.push(resolve));
+  if (_waitQueue.length >= MAX_QUEUE_SIZE) {
+    throw new LLMError('Server is overloaded. Please try again shortly.', 'queue');
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      const idx = _waitQueue.indexOf(resolve);
+      if (idx !== -1) _waitQueue.splice(idx, 1);
+      reject(new LLMError('Request timed out waiting for an LLM slot.', 'queue'));
+    }, QUEUE_TIMEOUT_MS);
+    _waitQueue.push(() => { clearTimeout(timeout); resolve(); });
+  });
   _activeLLM++;
 }
 function releaseLLMSlot(): void {

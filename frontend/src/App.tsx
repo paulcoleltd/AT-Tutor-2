@@ -61,8 +61,10 @@ const App: React.FC = () => {
   const handleResumeSession = (resumeSessionId: string) => {
     // The Chat component reads from localStorage keyed by sessionId;
     // passing the saved sessionId causes it to rehydrate that conversation.
-    // We accomplish this by resetting to the saved session ID.
-    window.location.href = window.location.pathname + `?resume=${resumeSessionId}`;
+    // CWE-598: Never put session IDs in URL query strings — they leak via browser
+    // history, referrer headers, and server access logs. Use sessionStorage instead.
+    sessionStorage.setItem('ai-tutor-resume-session', resumeSessionId);
+    window.location.href = window.location.pathname;
   };
 
   return (
