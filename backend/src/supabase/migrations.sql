@@ -68,8 +68,52 @@ language sql stable as $$
   limit  match_count;
 $$;
 
--- ── RLS policies (optional — enable if using Supabase Auth) ──────────────────
--- alter table user_profiles  enable row level security;
--- alter table chat_sessions  enable row level security;
--- alter table chat_messages  enable row level security;
--- alter table user_memories  enable row level security;
+-- ── Row Level Security ───────────────────────────────────────────────────────
+-- Enable RLS on all tables. The service_role key (used by the backend API)
+-- bypasses RLS automatically. The anon key (used in the frontend Supabase
+-- client) is blocked from direct table access — all reads/writes must go
+-- through the authenticated backend API. (CWE-284, OWASP A01:2021)
+
+alter table user_profiles  enable row level security;
+alter table chat_sessions  enable row level security;
+alter table chat_messages  enable row level security;
+alter table user_memories  enable row level security;
+
+-- ── Deny all direct anon-key access (backend API is the only entry point) ────
+-- No SELECT/INSERT/UPDATE/DELETE policies for 'anon' role means the anon key
+-- gets zero access to any table — only the service_role key (backend) can read/write.
+
+-- user_profiles: deny all anon access
+create policy if not exists "deny_anon_user_profiles"
+  on user_profiles for all to anon using (false);
+
+-- chat_sessions: deny all anon access
+create policy if not exists "deny_anon_chat_sessions"
+  on chat_sessions for all to anon using (false);
+
+-- chat_messages: deny all anon access
+create policy if not exists "deny_anon_chat_messages"
+  on chat_messages for all to anon using (false);
+
+-- user_memories: deny all anon access
+create policy if not exists "deny_anon_user_memories"
+  on user_memories for all to anon using (false);
+
+-- ── match_memories() security definer ────────────────────────────────────────
+-- Re-create the function as SECURITY DEFINER so it runs with service_role
+-- privileges even when called via the anon key (needed if ever used directly).
+create or replace function match_memories(
+  query_embedding vector(1536),
+  match_user_id   text,
+  match_count     int default 5
+)
+returns table (id uuid, summary text, similarity float)
+language sql stable security definer as $$
+  select id, summary,
+         1 - (embedding <=> query_embedding) as similarity
+  from   user_memories
+  where  user_id = match_user_id
+    and  embedding is not null
+  order  by embedding <=> query_embedding
+  limit  match_count;
+$$;
