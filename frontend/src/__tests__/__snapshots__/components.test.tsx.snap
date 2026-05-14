@@ -1,0 +1,244 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Snapshot tests — component structure stability > ErrorBoundary renders children when no error 1`] = `
+<div>
+  <div
+    data-testid="child"
+  >
+    OK
+  </div>
+</div>
+`;
+
+exports[`Snapshot tests — component structure stability > ErrorLog empty state matches snapshot 1`] = `
+<div
+  class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden"
+>
+  <button
+    class="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+  >
+    <div
+      class="flex items-center gap-2"
+    >
+      <span
+        class="text-lg"
+      >
+        📋
+      </span>
+      <div
+        class="text-left"
+      >
+        <p
+          class="text-sm font-semibold text-slate-700 dark:text-slate-200 leading-tight"
+        >
+          Error Log
+        </p>
+        <p
+          class="text-xs text-slate-400 dark:text-slate-500 leading-tight mt-0.5"
+        >
+          No events captured
+        </p>
+      </div>
+    </div>
+    <div
+      class="flex items-center gap-2"
+    >
+      <svg
+        class="w-4 h-4 text-slate-400 transition-transform duration-200 "
+        fill="currentColor"
+        viewBox="0 0 20 20"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          clip-rule="evenodd"
+          d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+          fill-rule="evenodd"
+        />
+      </svg>
+    </div>
+  </button>
+</div>
+`;
+
+exports[`Snapshot tests — component structure stability > ErrorLog with errors matches snapshot 1`] = `
+<div
+  class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden"
+>
+  <button
+    class="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+  >
+    <div
+      class="flex items-center gap-2"
+    >
+      <span
+        class="text-lg"
+      >
+        📋
+      </span>
+      <div
+        class="text-left"
+      >
+        <p
+          class="text-sm font-semibold text-slate-700 dark:text-slate-200 leading-tight"
+        >
+          Error Log
+        </p>
+        <p
+          class="text-xs text-slate-400 dark:text-slate-500 leading-tight mt-0.5"
+        >
+          3 events
+        </p>
+      </div>
+    </div>
+    <div
+      class="flex items-center gap-2"
+    >
+      <span
+        class="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full font-bold animate-pulse"
+      >
+        1
+         error
+      </span>
+      <svg
+        class="w-4 h-4 text-slate-400 transition-transform duration-200 "
+        fill="currentColor"
+        viewBox="0 0 20 20"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          clip-rule="evenodd"
+          d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+          fill-rule="evenodd"
+        />
+      </svg>
+    </div>
+  </button>
+</div>
+`;
+
+exports[`Snapshot tests — component structure stability > MemoryBank empty state matches snapshot 1`] = `
+<div
+  class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden"
+>
+  <button
+    class="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+  >
+    <div
+      class="flex items-center gap-2.5"
+    >
+      <span
+        class="text-base"
+      >
+        🧠
+      </span>
+      <div
+        class="text-left"
+      >
+        <p
+          class="text-sm font-semibold text-slate-700 dark:text-slate-200"
+        >
+          Long-term Memory
+        </p>
+        <p
+          class="text-xs text-slate-400 dark:text-slate-500 mt-0.5"
+        >
+          Nothing remembered yet
+        </p>
+      </div>
+    </div>
+    <div
+      class="flex items-center gap-2"
+    >
+      <svg
+        class="w-4 h-4 text-slate-400 transition-transform "
+        fill="currentColor"
+        viewBox="0 0 20 20"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          clip-rule="evenodd"
+          d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+          fill-rule="evenodd"
+        />
+      </svg>
+    </div>
+  </button>
+</div>
+`;
+
+exports[`Snapshot tests — component structure stability > MemoryBank with facts matches snapshot 1`] = `
+<div
+  class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden"
+>
+  <button
+    class="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+  >
+    <div
+      class="flex items-center gap-2.5"
+    >
+      <span
+        class="text-base"
+      >
+        🧠
+      </span>
+      <div
+        class="text-left"
+      >
+        <p
+          class="text-sm font-semibold text-slate-700 dark:text-slate-200"
+        >
+          Long-term Memory
+        </p>
+        <p
+          class="text-xs text-slate-400 dark:text-slate-500 mt-0.5"
+        >
+          3 facts remembered across sessions
+        </p>
+      </div>
+    </div>
+    <div
+      class="flex items-center gap-2"
+    >
+      <span
+        class="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full font-medium"
+      >
+        3
+      </span>
+      <svg
+        class="w-4 h-4 text-slate-400 transition-transform "
+        fill="currentColor"
+        viewBox="0 0 20 20"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          clip-rule="evenodd"
+          d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+          fill-rule="evenodd"
+        />
+      </svg>
+    </div>
+  </button>
+</div>
+`;
+
+exports[`Snapshot tests — component structure stability > ThemeToggle dark=false matches snapshot 1`] = `
+<button
+  aria-label="Switch to dark mode"
+  class="w-9 h-9 rounded-xl flex items-center justify-center text-lg transition-all
+               bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600"
+  title="Switch to dark mode"
+>
+  🌙
+</button>
+`;
+
+exports[`Snapshot tests — component structure stability > ThemeToggle dark=true matches snapshot 1`] = `
+<button
+  aria-label="Switch to light mode"
+  class="w-9 h-9 rounded-xl flex items-center justify-center text-lg transition-all
+               bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600"
+  title="Switch to light mode"
+>
+  ☀️
+</button>
+`;
