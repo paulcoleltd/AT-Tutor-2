@@ -26,7 +26,7 @@ const ChatBodySchema = z.object({
   // Vercel deployments with ephemeral memory, etc.). Capped at 40 turns to keep prompts lean.
   clientHistory:  z.array(z.object({
     role:    z.enum(['user', 'assistant']),
-    content: z.string().max(4000),
+    content: z.string().max(8000), // raised from 4000 — AI responses can be very long
   })).max(40).optional(),
 }).superRefine((data, ctx) => {
   if ((data.imageBase64 && !data.imageMimeType) || (!data.imageBase64 && data.imageMimeType)) {

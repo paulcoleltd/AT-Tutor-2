@@ -696,9 +696,12 @@ export const Chat: React.FC<Props> = ({
           // before this runs (for optimistic UI) but localStorage is updated by
           // useEffect AFTER render — so the current message is NOT yet in raw.
           // hydrateHistory on the backend skips orphaned trailing user messages anyway.
+          // Truncate each message to 3500 chars to stay safely under the backend's
+          // Zod schema limit (4000). Long AI responses (e.g. CI/CD explanations) can
+          // easily exceed 4000 chars and cause "Invalid request." 400 errors.
           return all
             .filter(m => m.role === 'user' || m.role === 'assistant')
-            .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+            .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content.slice(0, 3500) }));
         } catch { return []; }
       })();
 
