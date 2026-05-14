@@ -43,7 +43,9 @@ export function deriveTopic(messages: Array<{ role: string; content: string }>):
   const userMsgs = messages.filter(m => m.role === 'user' && m.content.trim().length > 10);
   if (userMsgs.length === 0) {
     const anyUser = messages.find(m => m.role === 'user')?.content?.trim();
-    return anyUser ? (anyUser.length > 60 ? anyUser.slice(0, 57) + '…' : anyUser) : 'Untitled session';
+    // Only use the fallback if it's a meaningful label (5+ chars), else "Untitled session"
+    if (!anyUser || anyUser.length < 5) return 'Untitled session';
+    return anyUser.length > 60 ? anyUser.slice(0, 57) + '…' : anyUser;
   }
   // Prefer first substantive message (captures the topic of the session)
   const best = userMsgs[0].content

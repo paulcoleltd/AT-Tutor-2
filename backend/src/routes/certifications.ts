@@ -21,6 +21,11 @@ export function createCertificationsRouter(): Router {
   });
 
   router.get('/:code', (req, res) => {
+    // CWE-20: Reject absurdly long cert codes to prevent CPU DoS from toLowerCase+find
+    if (req.params.code.length > 20) {
+      res.status(400).json({ error: 'Invalid certification code.' });
+      return;
+    }
     const cert = CERTIFICATIONS.find(
       c => c.code.toLowerCase() === req.params.code.toLowerCase(),
     );
