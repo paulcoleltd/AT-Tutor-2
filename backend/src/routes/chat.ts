@@ -39,23 +39,35 @@ const ChatBodySchema = z.object({
 
 const ANONYMOUS_SESSION = 'anonymous';
 
-// ── Abuse-pattern detection ────────────────────────────────────────────────────
-// Flags messages that match known prompt-injection or abuse patterns.
-// Returns the detected pattern label or null if the message looks benign.
-const ABUSE_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
-  { label: 'prompt_injection',    pattern: /ignore\s+(previous|all|your)\s+instructions?|disregard\s+(the\s+)?above|system\s+prompt|you\s+are\s+now\s+(?:an?\s+)?(?:DAN|evil|unrestricted)/i },
-  { label: 'jailbreak',           pattern: /act\s+as\s+(?:if\s+you\s+(?:are|were)\s+|an?\s+)?(?:DAN|evil|unfiltered|uncensored|GPT-?4?)\b|developer\s+mode|jailbreak/i },
-  { label: 'roleplay_jailbreak',  pattern: /pretend\s+(you|there)\s+(have|are|is)\s+no\s+(restriction|rule|filter|limit|constraint)/i },
-  { label: 'credential_harvest',  pattern: /(?:api\s+key|secret|password|token)\s*(?:is|=|:)\s*[A-Za-z0-9+/]{16,}/i },
-  { label: 'exfiltration_attempt',pattern: /repeat\s+(the\s+)?(?:system\s+)?prompt|print\s+your\s+instructions|reveal\s+your\s+(?:system\s+)?prompt|what\s+(?:are|were)\s+your\s+instructions|summarize\s+your\s+(configuration|setup|rules)/i },
-  { label: 'nested_json_inject',  pattern: /"role"\s*:\s*"system"/ },
-  { label: 'unicode_confusable',  pattern: /[！-～‘-‟]/ }, // full-width ASCII + fancy quotes
-  { label: 'high_volume_detect',  pattern: /.{3000,}/ }, // lowered from 3500
+// ── Abuse-pattern detection ─────────────────────────────────────────────────
+// Two tiers:
+//   BLOCK_PATTERNS — unambiguous attacks; return 400 immediately (OWASP A03, CWE-94)
+//   WARN_PATTERNS  — suspected abuse; log + allow through (system prompt handles it)
+//
+// credential_harvest → blocked: raw secrets must never reach the LLM (CWE-522)
+// nested_json_inject → blocked: raw JSON role-injection bypasses sanitiseInput (CWE-94)
+// unicode_confusable — WARN only: full-width ASCII is normal in CJK text; blocking it
+//                      would break the app for non-Latin users. sanitiseInput handles it.
+const BLOCK_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  { label: 'credential_harvest', pattern: /(?:api\s+key|secret|password|token)\s*(?:is|=|:)\s*[A-Za-z0-9+/]{16,}/i },
+  { label: 'nested_json_inject', pattern: /"role"\s*:\s*"system"/ },
 ];
 
-function detectAbuse(message: string): string | null {
-  for (const { label, pattern } of ABUSE_PATTERNS) {
-    if (pattern.test(message)) return label;
+const WARN_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  { label: 'prompt_injection',    pattern: /ignore\s+(previous|all|your)\s+instructions?|disregard\s+(the\s+)?above|system\s+prompt|you\s+are\s+now\s+(?:an?\s+)?(?:DAN|evil|unrestricted)/i },
+  { label: 'jailbreak',           pattern: /acts+ass+(?:ifs+yous+(?:are|were)s+|an?s+)?(?:DAN|evil|unfiltered|uncensored|GPT-?4?)|developers+mode|jailbreak/i },
+  { label: 'roleplay_jailbreak',  pattern: /pretend\s+(you|there)\s+(have|are|is)\s+no\s+(restriction|rule|filter|limit|constraint)/i },
+  { label: 'exfiltration_attempt',pattern: /repeat\s+(the\s+)?(?:system\s+)?prompt|print\s+your\s+instructions|reveal\s+your\s+(?:system\s+)?prompt|what\s+(?:are|were)\s+your\s+instructions|summarize\s+your\s+(configuration|setup|rules)/i },
+  { label: 'high_volume_detect',  pattern: /.{3000,}/ },
+];
+
+/** Returns { block: true, label } for unambiguous attacks, or { block: false, label } for warnings. */
+function detectAbuse(message: string): { block: boolean; label: string } | null {
+  for (const { label, pattern } of BLOCK_PATTERNS) {
+    if (pattern.test(message)) return { block: true, label };
+  }
+  for (const { label, pattern } of WARN_PATTERNS) {
+    if (pattern.test(message)) return { block: false, label };
   }
   return null;
 }
@@ -128,29 +140,39 @@ export function createChatRouter(agent: TeacherAgent): Router {
       return;
     }
 
-    const abuseLabel = detectAbuse(message);
-    if (abuseLabel) {
+    const abuseResult = detectAbuse(message);
+    if (abuseResult) {
       console.log(JSON.stringify({
         ts: new Date().toISOString(),
-        event: 'audit:abuse_detected',
-        label: abuseLabel,
+        event: abuseResult.block ? 'audit:abuse_blocked' : 'audit:abuse_detected',
+        label: abuseResult.label,
         sessionId,
         messageLen: message.length,
         preview: message.slice(0, 80),
       }));
-      // Do NOT block — the hardened system prompt handles it. Just log.
+      // BLOCK unambiguous attacks (credential_harvest, nested_json_inject) — return 400
+      // immediately so they never reach the LLM or get persisted to the DB. (OWASP A03)
+      // WARN-only patterns (prompt injection, jailbreaks) are logged but allowed through —
+      // the hardened system prompt provides the final line of defence.
+      if (abuseResult.block) {
+        res.status(400).json({ error: 'Message rejected. Prohibited content detected.' });
+        return;
+      }
     }
 
     // ── Memory injection (Supabase) ───────────────────────────────────────────
     const userId = (req as Request & { userId?: string }).userId ?? `anon_${sessionId}`;
     // CWE-94: Strip injection keywords, newlines, and control characters from
     // client-supplied text before injecting into LLM prompts.
-    const sanitiseInput = (s: string) => s
+    // maxLen must match the schema limit for each field to avoid silent data loss:
+    //   userContext   → 2000  (schema max is 2000)
+    //   clientHistory → 4000  (schema max is 4000, frontend already caps to 3500)
+    const sanitiseInput = (s: string, maxLen = 2000) => s
       .replace(/[\[\]<>{}]/g, ' ')
       .replace(/\r?\n/g, ' ')                   // strip newlines — prevent multi-line injection
       .replace(/\b(ignore|disregard|override|forget|system|instruction|prompt|jailbreak|developer mode)\b/gi, '[redacted]')
       .replace(/"role"\s*:\s*"system"/gi, '')    // block nested JSON role injection
-      .slice(0, 500)
+      .slice(0, maxLen)
       .trim();
 
     // Guard: reject requests with excessively large clientHistory (token abuse)
@@ -161,9 +183,11 @@ export function createChatRouter(agent: TeacherAgent): Router {
     }
 
     // Sanitise clientHistory content before injecting into LLM context (CWE-94)
+    // Use maxLen=4000 to match schema cap (frontend already truncates to 3500) — avoids
+    // silently garbling long assistant replies that were stored in localStorage history.
     const safeClientHistory = (clientHistory ?? []).map(m => ({
       role: m.role,
-      content: sanitiseInput(m.content),
+      content: sanitiseInput(m.content, 4000),
     }));
 
     // ── Client-history hydration (continued) ─────────────────────────────────
@@ -172,7 +196,8 @@ export function createChatRouter(agent: TeacherAgent): Router {
       agent.hydrateHistory(sessionId, safeClientHistory);
     }
 
-    let enrichedContext = userContext ? sanitiseInput(userContext) : '';
+    // sanitiseInput default maxLen=2000 matches the userContext schema cap
+    let enrichedContext = userContext ? sanitiseInput(userContext, 2000) : '';
 
     if (supabaseEnabled()) {
       await getOrCreateSupabaseSession(userId, sessionId, message);

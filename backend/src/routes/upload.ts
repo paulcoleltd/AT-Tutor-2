@@ -179,8 +179,8 @@ export function createUploadRouter(store: VectorStore): Router {
 
       const { chunksAdded } = await ingestDocument({ id, filename, content, type, store });
 
-      // If image was auto-processed, tell the client which LLM was used
-      const activeNow = getActiveProvider();
+      // CWE-200 / OWASP A05: Do NOT return the active provider name — leaks reconnaissance
+      // data about backend LLM configuration. The client can infer success from status=200.
       res.status(200).json({
         success: true,
         message: `Ingested "${filename}" (${chunksAdded} chunks added).`,
@@ -188,7 +188,6 @@ export function createUploadRouter(store: VectorStore): Router {
         chunksAdded,
         filename,
         type,
-        provider: activeNow,
       });
     } catch (err) {
       console.error(`[upload] Error processing "${filename}":`, err);
