@@ -96,7 +96,9 @@ export function createSearchRouter(): Router {
         .map((r, i) => `[${i + 1}] ${r.title}\n${r.snippet}${r.url ? `\nSource: ${r.url}` : ''}`)
         .join('\n\n');
 
-      console.log(JSON.stringify({ ts: new Date().toISOString(), event: 'search', query: q, resultCount: results.length }));
+      // CWE-532: truncate query to avoid PII in logs — full query stays server-side only
+      const queryPreview = q.length > 30 ? q.slice(0, 30) + '…' : q;
+      console.log(JSON.stringify({ ts: new Date().toISOString(), event: 'search', queryPreview, resultCount: results.length }));
 
       res.json({ query: q, results, summary });
     } catch (err) {

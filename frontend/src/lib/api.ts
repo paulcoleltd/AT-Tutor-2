@@ -2,6 +2,16 @@ const BASE_URL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
   : '/api';
 
+// Optional upload token — set VITE_UPLOAD_TOKEN in frontend env to match backend UPLOAD_TOKEN.
+// When unset, uploads work without authentication (public / dev deployments).
+const UPLOAD_TOKEN = import.meta.env.VITE_UPLOAD_TOKEN as string | undefined;
+
+function uploadHeaders(extra?: Record<string, string>): Record<string, string> {
+  const h: Record<string, string> = { ...extra };
+  if (UPLOAD_TOKEN) h['x-upload-token'] = UPLOAD_TOKEN;
+  return h;
+}
+
 export type TeachMode = 'explain' | 'quiz' | 'chat' | 'summarize' | 'flashcard' | 'exam';
 
 export interface UploadResult {
@@ -47,7 +57,11 @@ async function handle<T>(res: Response): Promise<T> {
 export async function uploadFile(file: File): Promise<UploadResult> {
   const body = new FormData();
   body.append('file', file);
-  return handle<UploadResult>(await fetch(`${BASE_URL}/upload`, { method: 'POST', body }));
+  return handle<UploadResult>(await fetch(`${BASE_URL}/upload`, {
+    method:  'POST',
+    headers: uploadHeaders(),
+    body,
+  }));
 }
 
 /** Upload a file and report progress (0–100) via the onProgress callback. */
@@ -74,6 +88,7 @@ export function uploadFileWithProgress(
     });
     xhr.addEventListener('error', () => reject(new Error('Network error during upload.')));
     xhr.open('POST', `${BASE_URL}/upload`);
+    if (UPLOAD_TOKEN) xhr.setRequestHeader('x-upload-token', UPLOAD_TOKEN);
     xhr.send(body);
   });
 }
@@ -81,13 +96,16 @@ export function uploadFileWithProgress(
 export async function uploadUrl(url: string): Promise<UploadResult> {
   return handle<UploadResult>(await fetch(`${BASE_URL}/upload/url`, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: uploadHeaders({ 'Content-Type': 'application/json' }),
     body:    JSON.stringify({ url }),
   }));
 }
 
 export async function deleteDocument(sourceId: string): Promise<void> {
-  await handle(await fetch(`${BASE_URL}/upload/${sourceId}`, { method: 'DELETE' }));
+  await handle(await fetch(`${BASE_URL}/upload/${sourceId}`, {
+    method:  'DELETE',
+    headers: uploadHeaders(),
+  }));
 }
 
 export interface KbSource { sourceId: string; filename: string; chunks: number; type: string; }
@@ -160,7 +178,8 @@ export async function* streamMessage(
 }
 
 export async function clearHistory(sessionId: string): Promise<void> {
-  await fetch(`${BASE_URL}/chat/history/${sessionId}`, { method: 'DELETE' });
+  // callerSession query param is the ownership proof — fixes B11 (DELETE body unreliable)
+  await fetch(`${BASE_URL}/chat/history/${sessionId}?callerSession=${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
 }
 
 export type TtsVoice = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';

@@ -5,6 +5,7 @@ import type { Components } from 'react-markdown';
 import { streamMessage, clearHistory, speakWithAI, setProvider, uploadUrl, webSearch, getSessionMessages, TeachMode, LLMProvider, ImageAttachment, SessionMeta } from '../lib/api';
 import { prepareForSpeech } from '../lib/emojiToSpeech';
 import { profileToContext } from '../hooks/useUserProfile';
+import { secureStorage } from '../lib/secureStorage';
 import { VoiceControls } from './VoiceControls';
 import { SessionHistory } from './SessionHistory';
 import { CertificationSelector } from './CertificationSelector';
@@ -127,24 +128,45 @@ function cappedMessages(prev: Message[], ...toAdd: Message[]): Message[] {
 
 function chatStorageKey(sessId: string) { return `ai-tutor-chat-${sessId}`; }
 
-/** Serialize messages to localStorage. Skips streaming messages and large images. */
+/** Serialize messages to encrypted localStorage. Skips streaming messages and large images. */
 function persistChat(sessId: string, msgs: Message[]): void {
   try {
     const saveable = msgs
       .filter(m => !m.streaming && m.content.trim())
       .slice(-MAX_STORED)
       .map(m => ({ ...m, timestamp: (m.timestamp as Date).toISOString(), image: undefined }));
-    // Always write the key so test suites can locate the active session in localStorage.
-    // For welcome-only state, write an empty array (minimal footprint).
     const hasRealConversation = saveable.length > 1 || (saveable.length === 1 && saveable[0].role !== 'assistant');
-    localStorage.setItem(chatStorageKey(sessId), JSON.stringify(hasRealConversation ? saveable : []));
+    const payload = JSON.stringify(hasRealConversation ? saveable : []);
+    // CWE-922: encrypt chat history at rest — protects against filesystem access
+    // to the browser's localStorage database and basic extension sniffing.
+    secureStorage.setItem(chatStorageKey(sessId), payload).catch(() => {
+      try { localStorage.setItem(chatStorageKey(sessId), payload); } catch {}
+    });
   } catch { /* quota exceeded or storage unavailable — degrade silently */ }
 }
 
-/** Restore messages from localStorage, converting ISO strings back to Dates. */
+/** Restore messages from (possibly encrypted) localStorage. */
 function restoreChat(sessId: string): Message[] {
+  // restoreChat is called synchronously during useState init so we must
+  // read the current value synchronously and parse it. Encrypted values
+  // written by persistChat are decrypted by secureStorage.getItem on the
+  // next tick; the initial render uses whatever is currently stored (which
+  // may be plaintext on first load or after a browser restart that cleared
+  // sessionStorage). The async decryption path updates messages via useEffect.
   try {
     const raw = localStorage.getItem(chatStorageKey(sessId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Array<Omit<Message, 'timestamp'> & { timestamp: string }>;
+    return parsed.map(m => ({ ...m, timestamp: new Date(m.timestamp) }));
+  } catch {
+    return [];
+  }
+}
+
+/** Async version — decrypts and hydrates messages after initial render. */
+async function restoreChatAsync(sessId: string): Promise<Message[]> {
+  try {
+    const raw = await secureStorage.getItem(chatStorageKey(sessId));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Array<Omit<Message, 'timestamp'> & { timestamp: string }>;
     return parsed.map(m => ({ ...m, timestamp: new Date(m.timestamp) }));
@@ -323,7 +345,13 @@ const CopyableCode: Components['code'] = ({ className, children, node: _node, ..
   );
 };
 
-const MD_COMPONENTS: Components = { code: CopyableCode };
+// CWE-79: render all links with noopener/noreferrer so AI-generated links
+// cannot access window.opener and cannot leak the referrer to external sites.
+const SafeLink: Components['a'] = ({ href, children, ...rest }) => (
+  <a href={href} target="_blank" rel="noopener noreferrer" {...rest}>{children}</a>
+);
+
+const MD_COMPONENTS: Components = { code: CopyableCode, a: SafeLink };
 
 const MessageBubble = memo(({ msg, isLastAssistant, isLoading, onDelete, onRegenerate }: BubbleProps) => (
   // content-visibility:auto lets the browser skip layout/paint for off-screen bubbles
@@ -490,6 +518,25 @@ export const Chat: React.FC<Props> = ({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input]);
+
+  // Async-decrypt chat history on first mount — synchronous restoreChat may have
+  // read an unencrypted value on the very first render (before the CryptoKey was
+  // available). This effect re-reads and decrypts the stored value if needed.
+  useEffect(() => {
+    restoreChatAsync(sessionId).then(decrypted => {
+      if (decrypted.length > 0) {
+        setMessages(prev => {
+          // Only hydrate if we currently show only the default welcome message
+          if (prev.length === 1 && prev[0].role === 'assistant' && decrypted.length > 1) {
+            return decrypted;
+          }
+          return prev;
+        });
+      }
+    }).catch(() => {});
+  // Only run on mount — sessionId is stable for the lifetime of this component instance
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Listen for "Study with AI" events fired by LearningRoadmap cert buttons
   useEffect(() => {
@@ -944,7 +991,7 @@ export const Chat: React.FC<Props> = ({
   const handleClear = async () => {
     abortRef.current?.abort();
     await clearHistory(currentSessId);
-    localStorage.removeItem(chatStorageKey(currentSessId));
+    secureStorage.removeItem(chatStorageKey(currentSessId));
     const newId = onSessionReset();
     setCurrentSessId(newId);
     setMessages([makeWelcome(resolvedPersona)]);

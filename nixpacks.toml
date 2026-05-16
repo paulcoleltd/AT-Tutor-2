@@ -1,16 +1,18 @@
-# Railway Nixpacks — use npm install (not npm ci) so lockfile drift never fails builds.
-# Overrides Nixpacks auto-detected install phase which defaults to 'npm ci'.
+# Railway Nixpacks — use npm ci for reproducible, supply-chain-safe builds.
+# npm ci respects package-lock.json exactly; npm install can silently drift.
+# If you hit "lockfile mismatch" errors, run `npm install` locally, commit the
+# updated lockfile, and redeploy — do not downgrade back to npm install here.
 
 [phases.setup]
 nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["npm install"]
+cmds = ["npm ci"]
 
 [phases.build]
 cmds = [
-  "cd backend && npm install && npm run build",
-  "cd frontend && npm install && npm run build"
+  "cd backend && npm ci && npm run build",
+  "cd frontend && npm ci && npm run build"
 ]
 
 [start]
