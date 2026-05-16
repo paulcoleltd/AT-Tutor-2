@@ -4,6 +4,11 @@ import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+// Optional session-scoped provider — when provided it overrides the global active
+// provider for this single call only. Enables per-session provider preferences
+// without race conditions from temporarily mutating global state.
+export type ProviderOverride = LLMProvider | undefined;
+
 let _openai: OpenAI | null = null;
 let _anthropic: Anthropic | null = null;
 let _genAI: GoogleGenerativeAI | null = null;
@@ -23,8 +28,8 @@ export function getAvailableProviders(): LLMProvider[] {
   });
 }
 
-function getProviderFallbackOrder(): LLMProvider[] {
-  const active = getActiveProvider();
+function getProviderFallbackOrder(override?: ProviderOverride): LLMProvider[] {
+  const active = override ?? getActiveProvider();
   const available = getAvailableProviders();
   return [active, ...available.filter(p => p !== active)];
 }
@@ -54,8 +59,8 @@ export class LLMError extends Error {
 }
 
 // ── Non-streaming ─────────────────────────────────────────────────────────────
-export async function callLLM(system: string, user: string, history: Message[]): Promise<string> {
-  const providers = getProviderFallbackOrder();
+export async function callLLM(system: string, user: string, history: Message[], providerOverride?: ProviderOverride): Promise<string> {
+  const providers = getProviderFallbackOrder(providerOverride);
   const errors: string[] = [];
 
   for (const provider of providers) {
@@ -64,12 +69,11 @@ export async function callLLM(system: string, user: string, history: Message[]):
     } catch (err) {
       const providerErr = err instanceof LLMError ? err : new LLMError(`Unexpected error from ${provider}: ${(err as Error).message}`, provider, err);
       errors.push(`${provider}: ${providerErr.message}`);
-      if (provider === getActiveProvider()) continue; // try fallback providers
       continue;
     }
   }
 
-  throw new LLMError(`All configured providers failed: ${errors.join(' | ')}`, getActiveProvider());
+  throw new LLMError(`All configured providers failed: ${errors.join(' | ')}`, providerOverride ?? getActiveProvider());
 }
 
 // ── Concurrency limiter ───────────────────────────────────────────────────────
@@ -111,10 +115,10 @@ function releaseLLMSlot(): void {
 
 // ── Streaming — yields token chunks ──────────────────────────────────────────
 export async function* streamLLM(
-  system: string, user: string, history: Message[]
+  system: string, user: string, history: Message[], providerOverride?: ProviderOverride
 ): AsyncGenerator<string, void, unknown> {
   await acquireLLMSlot();
-  const providers = getProviderFallbackOrder();
+  const providers = getProviderFallbackOrder(providerOverride);
   let lastError: Error | null = null;
 
   try {
@@ -153,7 +157,7 @@ export async function* streamLLM(
 
   throw lastError instanceof LLMError
     ? lastError
-    : new LLMError('All configured providers failed to stream a response.', getActiveProvider(), lastError);
+    : new LLMError('All configured providers failed to stream a response.', providerOverride ?? getActiveProvider(), lastError);
 }
 
 // ── OpenAI ───────────────────────────────────────────────────────────────────
@@ -284,9 +288,9 @@ export async function describeImageWithLLM(imageData: ImageData, prompt: string)
 }
 
 export async function* streamLLMWithImage(
-  system: string, user: string, history: Message[], imageData: ImageData
+  system: string, user: string, history: Message[], imageData: ImageData, providerOverride?: ProviderOverride
 ): AsyncGenerator<string, void, unknown> {
-  const provider = getActiveProvider();
+  const provider = providerOverride ?? getActiveProvider();
   if (provider === 'claude') {
     const messages: Anthropic.MessageParam[] = [
       ...history.filter(m => m.role !== 'system').map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),

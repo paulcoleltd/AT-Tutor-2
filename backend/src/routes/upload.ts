@@ -64,6 +64,21 @@ function getOpenAI() {
   return new OpenAI({ apiKey: CONFIG.openaiApiKey });
 }
 
+// CWE-306: Require an upload token when UPLOAD_TOKEN env var is set.
+// This gates document ingestion without requiring full user authentication.
+// Deploy with a random token (openssl rand -hex 32) shared with the frontend
+// via VITE_UPLOAD_TOKEN env var. Anonymous deployments can leave it unset.
+function requireUploadToken(req: Request, res: Response, next: import('express').NextFunction): void {
+  const expectedToken = process.env.UPLOAD_TOKEN;
+  if (!expectedToken) { next(); return; } // token not configured — allow all (dev / public mode)
+  const provided = req.headers['x-upload-token'] as string | undefined;
+  if (!provided || provided !== expectedToken) {
+    res.status(401).json({ error: 'Upload token required.' });
+    return;
+  }
+  next();
+}
+
 export function createUploadRouter(store: VectorStore): Router {
   const router = Router();
 
@@ -86,7 +101,7 @@ export function createUploadRouter(store: VectorStore): Router {
   });
 
   // POST /api/upload — ingest a document or media file
-  router.post('/', (req: Request, res: Response, next: NextFunction) => {
+  router.post('/', requireUploadToken, (req: Request, res: Response, next: NextFunction) => {
     upload.single('file')(req, res, (err) => {
       if (err instanceof multer.MulterError) { res.status(400).json({ error: err.message }); return; }
       if (err instanceof Error)              { res.status(400).json({ error: err.message }); return; }
@@ -201,7 +216,7 @@ export function createUploadRouter(store: VectorStore): Router {
     res.json({ sources: store.getSources() });
   });
 
-  router.delete('/:sourceId', (req: Request, res: Response): void => {
+  router.delete('/:sourceId', requireUploadToken, (req: Request, res: Response): void => {
     const { sourceId } = req.params;
     const VALID_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!sourceId || !VALID_UUID.test(sourceId)) { res.status(400).json({ error: 'Invalid sourceId.' }); return; }

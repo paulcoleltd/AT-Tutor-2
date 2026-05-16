@@ -30,10 +30,22 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+// CWE-306: Same upload token guard as upload.ts — protects the URL ingest endpoint.
+function requireUploadToken(req: Request, res: Response, next: import('express').NextFunction): void {
+  const expectedToken = process.env.UPLOAD_TOKEN;
+  if (!expectedToken) { next(); return; }
+  const provided = req.headers['x-upload-token'] as string | undefined;
+  if (!provided || provided !== expectedToken) {
+    res.status(401).json({ error: 'Upload token required.' });
+    return;
+  }
+  next();
+}
+
 export function createUploadUrlRouter(store: VectorStore): Router {
   const router = Router();
 
-  router.post('/', async (req: Request, res: Response): Promise<void> => {
+  router.post('/', requireUploadToken, async (req: Request, res: Response): Promise<void> => {
     const parsed = BodySchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'Invalid request. Provide a valid URL.' });
@@ -67,6 +79,11 @@ export function createUploadUrlRouter(store: VectorStore): Router {
         /^\[/,                                       // any IPv6 literal (e.g. [::1], [::ffff:127.0.0.1])
         /^fd[0-9a-f]{2}:/i,                         // IPv6 ULA (fc00::/7)
         /^fe80:/i,                                   // IPv6 link-local
+        /^::1$/,                                     // IPv6 loopback — DNS may return without brackets (L-L7)
+        /^::ffff:127\./,                             // IPv4-mapped loopback ::ffff:127.x.x.x
+        /^::ffff:10\./,                              // IPv4-mapped RFC-1918 class A
+        /^::ffff:192\.168\./,                        // IPv4-mapped RFC-1918 class C
+        /^::ffff:172\.(1[6-9]|2\d|3[01])\./,        // IPv4-mapped RFC-1918 class B
       ];
 
       if (BLOCKED.some(r => r.test(hostname))) {

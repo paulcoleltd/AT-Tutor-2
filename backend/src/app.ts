@@ -29,7 +29,10 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGIN
   ? [process.env.ALLOWED_ORIGIN, 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174']
   : ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174'];
 
-const RATE_LIMIT_SKIP = ['/api/health', '/api/config/provider'];
+// /api/health is exempt from rate-limiting (used by load-balancer health checks).
+// /api/config/provider was previously exempt but is now rate-limited — any user
+// switching it affects the global provider for all sessions (B6 remediation).
+const RATE_LIMIT_SKIP = ['/api/health'];
 
 function makeLimit(max: number, windowMs = CONFIG.rateLimitWindowMs) {
   return rateLimit({
@@ -42,6 +45,36 @@ function makeLimit(max: number, windowMs = CONFIG.rateLimitWindowMs) {
   });
 }
 
+// Security headers for Railway/Render deployments.
+// Vercel deployments get these from vercel.json rewrites instead.
+// helmet() is already applied but uses conservative defaults — this adds the
+// same CSP and COEP headers that vercel.json provides to the browser layer.
+function applyProductionHeaders(app: import('express').Application): void {
+  if (process.env.VERCEL) return; // Vercel applies headers at the edge
+  app.use((_req, res, next) => {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), interest-cohort=()');
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline'; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "connect-src 'self' https://*.supabase.co https://api.anthropic.com https://api.openai.com https://*.railway.app https://*.onrender.com; " +
+      "frame-src https://www.youtube.com https://player.vimeo.com; " +
+      "img-src 'self' data: blob: https:; " +
+      "media-src 'self' blob: https:; " +
+      "worker-src 'self' blob:; " +
+      "object-src 'none'; " +
+      "base-uri 'self'; " +
+      "form-action 'self';",
+    );
+    next();
+  });
+}
+
 export function createApp() {
   validateConfig();
 
@@ -49,6 +82,7 @@ export function createApp() {
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
   app.use(helmet());
+  applyProductionHeaders(app);
   app.use(cookieParser());
   app.use(attachUserId);
 

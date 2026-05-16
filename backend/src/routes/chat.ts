@@ -140,26 +140,6 @@ export function createChatRouter(agent: TeacherAgent): Router {
       return;
     }
 
-    const abuseResult = detectAbuse(message);
-    if (abuseResult) {
-      console.log(JSON.stringify({
-        ts: new Date().toISOString(),
-        event: abuseResult.block ? 'audit:abuse_blocked' : 'audit:abuse_detected',
-        label: abuseResult.label,
-        sessionId,
-        messageLen: message.length,
-        preview: message.slice(0, 80),
-      }));
-      // BLOCK unambiguous attacks (credential_harvest, nested_json_inject) — return 400
-      // immediately so they never reach the LLM or get persisted to the DB. (OWASP A03)
-      // WARN-only patterns (prompt injection, jailbreaks) are logged but allowed through —
-      // the hardened system prompt provides the final line of defence.
-      if (abuseResult.block) {
-        res.status(400).json({ error: 'Message rejected. Prohibited content detected.' });
-        return;
-      }
-    }
-
     // ── Memory injection (Supabase) ───────────────────────────────────────────
     const userId = (req as Request & { userId?: string }).userId ?? `anon_${sessionId}`;
     // CWE-94: Strip injection keywords, newlines, and control characters from
@@ -172,8 +152,31 @@ export function createChatRouter(agent: TeacherAgent): Router {
       .replace(/\r?\n/g, ' ')                   // strip newlines — prevent multi-line injection
       .replace(/\b(ignore|disregard|override|forget|system|instruction|prompt|jailbreak|developer mode)\b/gi, '[redacted]')
       .replace(/"role"\s*:\s*"system"/gi, '')    // block nested JSON role injection
+      .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '') // strip non-printable control chars
       .slice(0, maxLen)
       .trim();
+
+    const abuseResult = detectAbuse(message);
+    if (abuseResult) {
+      // CWE-117: sanitise preview before writing to logs — prevents ANSI/newline log injection
+      const safePreview = message.replace(/[\r\n\x1b]/g, ' ').slice(0, 80);
+      console.log(JSON.stringify({
+        ts: new Date().toISOString(),
+        event: abuseResult.block ? 'audit:abuse_blocked' : 'audit:abuse_detected',
+        label: abuseResult.label,
+        sessionId,
+        messageLen: message.length,
+        preview: safePreview,
+      }));
+      // BLOCK unambiguous attacks (credential_harvest, nested_json_inject) — return 400
+      // immediately so they never reach the LLM or get persisted to the DB. (OWASP A03)
+      // WARN-only patterns (prompt injection, jailbreaks) are logged but allowed through —
+      // the hardened system prompt provides the final line of defence.
+      if (abuseResult.block) {
+        res.status(400).json({ error: 'Message rejected. Prohibited content detected.' });
+        return;
+      }
+    }
 
     // Guard: reject requests with excessively large clientHistory (token abuse)
     const historyTotalChars = (clientHistory ?? []).reduce((s, m) => s + m.content.length, 0);
@@ -323,8 +326,9 @@ export function createChatRouter(agent: TeacherAgent): Router {
     }
   });
 
-  // Reset a specific session — MUST belong to the calling user (T1531: prevents
-  // unauthenticated deletion of another user's history)
+  // Reset a specific session — MUST belong to the calling user (T1531, CWE-639).
+  // Ownership proof via query param — avoids the HTTP DELETE body portability
+  // issue where some proxies/clients silently drop request bodies on DELETE.
   router.delete('/history/:sessionId', (req: Request, res: Response): void => {
     const { sessionId } = req.params;
     const VALID_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -332,16 +336,11 @@ export function createChatRouter(agent: TeacherAgent): Router {
       res.status(400).json({ error: 'Invalid sessionId.' });
       return;
     }
-    // Enforce ownership: sessionId must match the caller's session or anonymous session
-    const callerId = (req as Request & { userId?: string }).userId;
-    const callerSession = req.body?.callerSessionId as string | undefined;
-    // Ownership: caller must prove they own the session by sending its ID back.
-    // The startsWith check was removed — it was never logically valid (UUIDs don't
-    // start with userIds) and created a false sense of security. (CWE-639)
-    if (
-      sessionId !== ANONYMOUS_SESSION &&
-      callerSession !== sessionId
-    ) {
+    // Caller echoes the sessionId back as a query parameter to prove ownership.
+    // Not cryptographically strong auth, but prevents accidental cross-session deletion.
+    // Full auth (JWT verification) is the strategic remediation — tracked in SECURITY.md.
+    const callerSession = req.query.callerSession as string | undefined;
+    if (sessionId !== ANONYMOUS_SESSION && callerSession !== sessionId) {
       res.status(403).json({ error: 'You do not have permission to delete this session.' });
       return;
     }

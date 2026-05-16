@@ -4,6 +4,7 @@ import { SessionStore } from '../sessions/sessionStore';
 import { MemoryManager } from '../memory/memoryManager';
 import { getDb } from '../db';
 import { detectCertInText, Certification } from '../data/certifications';
+import { getSessionProvider } from '../runtimeConfig';
 
 export type TeachMode = 'explain' | 'quiz' | 'chat' | 'summarize' | 'flashcard' | 'exam';
 
@@ -144,6 +145,23 @@ const PERSONA_INSTRUCTIONS: Record<string, string> = {
 
 const CUSTOM_PERSONA_MAX_LENGTH = 80;
 
+// CWE-94 / OWASP LLM01: Sanitize retrieved KB chunks before injecting into the LLM prompt.
+// Documents and web pages may contain adversarial payloads designed to override system
+// instructions (indirect prompt injection). This strips the most common structural markers
+// while preserving the factual content that legitimate documents contain.
+function sanitizeChunk(text: string): string {
+  return text
+    // Strip XML/HTML tags that could be used to inject fake prompt blocks
+    .replace(/<\/?(knowledge_base|user_context|system|instruction|assigned_role|user_said)[^>]*>/gi, '')
+    // Redact common injection trigger phrases found in adversarial documents
+    .replace(/\b(ignore|disregard|override|forget)\s+(all\s+)?(previous|prior|above|your)\s+(instructions?|rules?|guidelines?|constraints?)/gi, '[redacted]')
+    .replace(/you\s+are\s+now\s+(in\s+)?(developer|maintenance|override|god|jailbreak)\s+mode/gi, '[redacted]')
+    .replace(/\b(system\s+prompt|hidden\s+instructions?|internal\s+rules?)\s*:/gi, '[redacted]:')
+    // Strip zero-width and invisible Unicode that can be used to hide injections
+    .replace(/[​-‏‪-‮⁠-⁤﻿]/g, '')
+    .trim();
+}
+
 function sanitizePersona(persona?: string): string {
   if (!persona) return 'AI Tutor';
   const cleaned = persona
@@ -169,8 +187,10 @@ export class TeacherAgent {
     if (!userText?.trim()) throw new Error('TeacherAgent.ask: userText must not be empty.');
 
     const { chunks, sources } = await this.brain.retrieve(userText);
+    // CWE-94: sanitize each chunk before joining — prevents indirect prompt injection
+    // from adversarial content embedded in uploaded documents or fetched URLs.
     const contextStr = chunks.length > 0
-      ? chunks.join('\n\n---\n\n')
+      ? chunks.map(sanitizeChunk).join('\n\n---\n\n')
       : '(No documents uploaded yet. Answer from general knowledge.)';
 
     const instruction    = MODE_INSTRUCTIONS[mode] ?? MODE_INSTRUCTIONS.explain;
@@ -184,16 +204,19 @@ export class TeacherAgent {
     const certBlock     = cert ? buildCertContext(cert) : '';
     const systemPrompt  = SYSTEM_PROMPT + memoryBlock + certBlock;
 
+    const sessionProvider = getSessionProvider(sessionId);
     let raw: string;
     try {
-      raw = await callLLM(systemPrompt, userPrompt, history);
+      raw = await callLLM(systemPrompt, userPrompt, history, sessionProvider);
     } catch (err) {
       if (err instanceof LLMError) throw err;
       throw new Error(`Unexpected error in teacher agent: ${(err as Error).message}`);
     }
 
     const { stripped: quizStripped, outcome } = parseAndStripOutcome(raw);
-    const { stripped: answer, examResult }    = parseAndStripExamResult(quizStripped);
+    // CWE-20: Only parse EXAM_RESULT tags when mode is 'exam' — prevents adversarial
+    // KB content or prompt-injection from forging exam scores in any other mode.
+    const { stripped: answer, examResult }    = parseAndStripExamResult(quizStripped, mode === 'exam');
 
     recordMode(sessionId, mode);
     if (mode === 'quiz' && outcome !== null) recordQuizResult(sessionId, outcome === 'correct');
@@ -213,13 +236,15 @@ export class TeacherAgent {
     if (!userText?.trim()) throw new Error('TeacherAgent.stream: userText must not be empty.');
 
     const { chunks, sources, focusSourceHit }: RetrievalResult = await this.brain.retrieve(userText, undefined, focusSourceId);
+    // CWE-94: sanitize KB chunks before injection (indirect prompt injection prevention)
+    const safeChunks = chunks.map(sanitizeChunk);
     let contextStr: string;
-    if (chunks.length === 0) {
+    if (safeChunks.length === 0) {
       contextStr = '(No documents in knowledge base. Answer from general knowledge.)';
     } else if (focusSourceId && !focusSourceHit) {
-      contextStr = `(The requested source was not found in the knowledge base. Showing best available context:)\n\n${chunks.join('\n\n---\n\n')}`;
+      contextStr = `(The requested source was not found in the knowledge base. Showing best available context:)\n\n${safeChunks.join('\n\n---\n\n')}`;
     } else {
-      contextStr = chunks.join('\n\n---\n\n');
+      contextStr = safeChunks.join('\n\n---\n\n');
     }
 
     const instruction   = MODE_INSTRUCTIONS[mode] ?? MODE_INSTRUCTIONS.explain;
@@ -241,17 +266,19 @@ export class TeacherAgent {
     // Emit sources first so the client can show them immediately
     yield { sources };
 
+    const sessionProvider = getSessionProvider(sessionId);
     let fullAnswer = '';
     const generator = imageData
-      ? streamLLMWithImage(systemPrompt, userPrompt, history, imageData)
-      : streamLLM(systemPrompt, userPrompt, history);
+      ? streamLLMWithImage(systemPrompt, userPrompt, history, imageData, sessionProvider)
+      : streamLLM(systemPrompt, userPrompt, history, sessionProvider);
     for await (const token of generator) {
       fullAnswer += token;
       yield { token };
     }
 
     const { stripped: quizStripped, outcome }    = parseAndStripOutcome(fullAnswer);
-    const { stripped: cleanAnswer, examResult }  = parseAndStripExamResult(quizStripped);
+    // CWE-20: exam-mode gate prevents forged EXAM_RESULT tags in non-exam responses
+    const { stripped: cleanAnswer, examResult }  = parseAndStripExamResult(quizStripped, mode === 'exam');
     const wasTagged = outcome !== null || examResult !== null;
 
     recordMode(sessionId, mode);
@@ -327,10 +354,14 @@ function buildCertContext(cert: Certification): string {
 
 const EXAM_RESULT_RE = /\[EXAM_RESULT:([^\]]+)\]/i;
 
-function parseAndStripExamResult(text: string): {
+// CWE-20: inExamMode flag ensures we only parse EXAM_RESULT tags when the request
+// was explicitly made in exam mode. Without this gate an adversarial KB document
+// could embed the tag and forge exam records for any conversation mode.
+function parseAndStripExamResult(text: string, inExamMode: boolean): {
   stripped: string;
   examResult: { score: number; total: number; grade: string; improvements: string[] } | null;
 } {
+  if (!inExamMode) return { stripped: text, examResult: null };
   const m = text.match(EXAM_RESULT_RE);
   if (!m) return { stripped: text, examResult: null };
   const params = Object.fromEntries(m[1].split(',').map(p => p.split('=') as [string, string]));
@@ -379,15 +410,22 @@ function buildPrompt(context: string, instruction: string, userText: string, per
   const personaInstruction = PERSONA_INSTRUCTIONS[safePersona]
     ?? `You are a helpful assistant with this style: ${safePersona}. Stay polite, factual, and transparent.`;
 
-  const roleBlock    = `ASSIGNED ROLE:\n${personaInstruction}\n\n`;
+  // XML structural delimiters prevent userContext from being parsed as instructions.
+  // Even if userContext contains text that resembles prompt markers (e.g. "ASSIGNED ROLE:"),
+  // the LLM sees it as data inside <user_context> tags, not as top-level instructions.
+  const roleBlock    = `<assigned_role>\n${personaInstruction}\n</assigned_role>`;
   const profileBlock = userContext?.trim()
-    ? `${userContext.trim()}\n\n`
+    ? `<user_context>\n${userContext.trim()}\n</user_context>\n\n`
     : '';
 
+  // Wrap KB context in XML tags so the LLM structurally separates reference data
+  // from instructions — critical for indirect prompt injection resistance.
+  const kbBlock = `<knowledge_base>\n${context}\n</knowledge_base>`;
+
   return [
-    `CONTEXT FROM KNOWLEDGE BASE:\n${context}`,
-    profileBlock + roleBlock.trim(),
-    `INSTRUCTION:\n${instruction}`,
-    `USER SAID:\n${userText}`,
+    kbBlock,
+    profileBlock + roleBlock,
+    `<instruction>\n${instruction}\n</instruction>`,
+    `<user_message>\n${userText}\n</user_message>`,
   ].join('\n\n').trim();
 }

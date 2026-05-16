@@ -38,9 +38,25 @@ function prepareForSpeechBackend(text: string): string {
 const TTS_VOICES = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] as const;
 
 const TtsBodySchema = z.object({
-  text:  z.string().min(1).max(1200), // reduced from 4096 — limits cost abuse (CWE-770)
-  voice: z.enum(TTS_VOICES).optional().default('nova'),
+  text:      z.string().min(1).max(1200), // reduced from 4096 — limits cost abuse (CWE-770)
+  voice:     z.enum(TTS_VOICES).optional().default('nova'),
+  sessionId: z.string().max(128).optional(),
 });
+
+// CWE-770: Per-session TTS rate limiter — prevents API cost abuse (OpenAI charges per char).
+// 10 requests/min per session is generous for normal use but blocks bulk abuse.
+const _ttsRequests = new Map<string, { count: number; windowStart: number }>();
+const TTS_RATE_LIMIT  = 10;
+const TTS_WINDOW_MS   = 60_000;
+
+function checkTtsRate(key: string): boolean {
+  const now = Date.now();
+  const rec = _ttsRequests.get(key) ?? { count: 0, windowStart: now };
+  if (now - rec.windowStart > TTS_WINDOW_MS) { rec.count = 1; rec.windowStart = now; }
+  else { rec.count += 1; }
+  _ttsRequests.set(key, rec);
+  return rec.count <= TTS_RATE_LIMIT;
+}
 
 export function createTtsRouter(): Router {
   const router = Router();
@@ -57,7 +73,14 @@ export function createTtsRouter(): Router {
       return;
     }
 
-    const { text, voice } = parsed.data;
+    const { text, voice, sessionId } = parsed.data;
+
+    // Rate-limit by session ID when provided, fall back to IP address
+    const rateLimitKey = sessionId ?? (req.ip ?? 'unknown');
+    if (!checkTtsRate(rateLimitKey)) {
+      res.status(429).json({ error: 'Too many TTS requests. Please wait a moment.' });
+      return;
+    }
     // Convert emoji to natural speech words, then strip markdown
     const clean = prepareForSpeechBackend(text);
 
