@@ -23,7 +23,6 @@ import { useErrorLog } from './hooks/useErrorLog';
 import { useMemoryBank } from './hooks/useMemoryBank';
 import { MemoryBank } from './components/MemoryBank';
 import { getHealth, LLMProvider } from './lib/api';
-import { supabaseEnabled } from './lib/supabase';
 
 const App: React.FC = () => {
   const { dark, toggle } = useDarkMode();
@@ -117,20 +116,18 @@ const App: React.FC = () => {
             6 Modes
           </span>
           {/* Auth button */}
-          {supabaseEnabled() && (
-            <button
-              onClick={() => setShowAuth(true)}
-              title={user ? `Signed in as ${user.email}` : 'Sign in to sync memory'}
-              className={`hidden sm:flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
-                user
-                  ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
-                  : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
-              }`}
-            >
-              <span>{user ? '✓' : '👤'}</span>
-              <span>{user ? 'Synced' : 'Sign in'}</span>
-            </button>
-          )}
+          <button
+            onClick={() => setShowAuth(true)}
+            title={user ? `Signed in as ${user.email}` : 'Sign in to sync memory'}
+            className={`hidden sm:flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+              user
+                ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
+            }`}
+          >
+            <span>{user ? '✓' : '👤'}</span>
+            <span>{user ? 'Synced' : 'Sign in'}</span>
+          </button>
           <ThemeToggle dark={dark} onToggle={toggle} />
         </div>
       </header>
