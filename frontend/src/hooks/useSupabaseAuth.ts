@@ -29,11 +29,16 @@ export function useSupabaseAuth(): AuthState {
 
   const signInEmail = async (email: string) => {
     if (!supabase) return { error: 'Supabase not configured' };
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin },
-    });
-    return { error: error?.message ?? null };
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: window.location.origin },
+      });
+      return { error: error?.message ?? null };
+    } catch (err) {
+      // Network failure — Supabase URL unreachable or misconfigured
+      return { error: 'Cannot reach the auth server. Please check your Supabase configuration or try again later.' };
+    }
   };
 
   const signOut = async () => {

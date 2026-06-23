@@ -118,7 +118,17 @@ export const AuthModal: React.FC<Props> = ({ onClose }) => {
                   className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
-              {error && <p className="text-xs text-red-500">{error}</p>}
+              {error && (
+                <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3">
+                  <p className="text-xs text-red-600 dark:text-red-400 font-medium">{error}</p>
+                  {error.includes('auth server') && (
+                    <p className="text-xs text-red-500 dark:text-red-500 mt-1">
+                      Add <code className="bg-red-100 dark:bg-red-900/40 px-1 rounded">VITE_SUPABASE_URL</code> and{' '}
+                      <code className="bg-red-100 dark:bg-red-900/40 px-1 rounded">VITE_SUPABASE_ANON_KEY</code> to your Vercel environment variables.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Primary action button */}
               <button
